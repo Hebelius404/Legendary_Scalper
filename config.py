@@ -16,7 +16,7 @@ API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_API_SECRET")
 
 # Use Testnet for safety
-USE_TESTNET = True
+USE_TESTNET = False
 
 # Base URLs
 TESTNET_BASE_URL = "https://testnet.binancefuture.com"
