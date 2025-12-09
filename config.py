@@ -16,7 +16,7 @@ API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_API_SECRET")
 
 # Use Testnet for safety
-USE_TESTNET = False
+USE_TESTNET = True
 
 # Base URLs
 TESTNET_BASE_URL = "https://testnet.binancefuture.com"
@@ -210,6 +210,12 @@ MARTINGALE_STEP_WAIT_TIMES = [
     5, 5, 10, 10, 15,   # Steps 6-10 (Medium)
     20, 30, 45, 60, 90  # Steps 11-15 (Slow/Patient)
 ]
+
+# Dynamic Blacklist Settings (prevent repeated losses on same token)
+DYNAMIC_BLACKLIST_ENABLED = True          # Enable automatic token blacklisting
+DYNAMIC_BLACKLIST_STOP_LOSSES = 2         # Number of stop losses to trigger blacklist
+DYNAMIC_BLACKLIST_WINDOW_HOURS = 2        # Time window to count stop losses (hours)
+DYNAMIC_BLACKLIST_DURATION_HOURS = 6      # Blacklist duration (hours)
 
 # =============================================================================
 # LOGGING
