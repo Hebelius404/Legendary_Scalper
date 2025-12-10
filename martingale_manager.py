@@ -510,6 +510,7 @@ class MartingaleManager:
         if not position:
             return {'should_close': False}
         
+        # Only half-close Step 3+. Step 1-2 too small.
         if position.step < 3:
             return {'should_close': False, 'reason': 'Step < 3'}
         
@@ -523,24 +524,29 @@ class MartingaleManager:
         # Calculate actual P&L in USD
         pnl_usd = (position.average_entry - current_price) * position.total_quantity
         
-        # Step 3: Close half with small profit (even $0.50 is enough)
-        if position.step == 3:
-            if pnl_usd >= 0.5:  # Small profit threshold
-                return {
-                    'should_close': True,
-                    'reason': f'Step 3 + Small profit (${pnl_usd:.2f})',
-                    'pnl_usd': pnl_usd
-                }
+        # Dynamic half-close threshold: 50% of TP target
+        # This locks in profit while letting the rest ride
+        step = position.step
+        if step == 3:
+            min_profit = 3.0   # TP is $6, half-close at $3
+        elif step == 4:
+            min_profit = 4.0   # TP is $8, half-close at $4
+        elif step == 5:
+            min_profit = 5.0   # TP is $10, half-close at $5
+        elif step <= 7:
+            min_profit = 6.0   # TP is $12, half-close at $6
+        else:  # step 8+
+            min_profit = 10.0  # TP is $20, half-close at $10
         
-        # Step 4+: Close half when price returns near average
-        if distance_to_avg <= self.half_close_threshold and distance_to_avg > -10:
+        # Half-close when profit reaches threshold
+        if pnl_usd >= min_profit:
             return {
                 'should_close': True,
-                'reason': f'Price near average ({distance_to_avg:.1f}%)',
-                'distance': distance_to_avg
+                'reason': f'Step {step} half-close at ${pnl_usd:.2f} (target ${min_profit})',
+                'pnl_usd': pnl_usd
             }
         
-        return {'should_close': False, 'reason': f'Distance {distance_to_avg:.1f}%', 'pnl_usd': pnl_usd}
+        return {'should_close': False, 'reason': f'Profit ${pnl_usd:.2f} < ${min_profit}', 'pnl_usd': pnl_usd}
     
     def close_half(self, symbol: str, current_price: float) -> bool:
         """Close half of the Martingale position"""
@@ -633,6 +639,10 @@ class MartingaleManager:
         - Price has returned closer to average (within 1%)
         - Haven't exceeded MAX_RECYCLES
         """
+        # DISABLED: Recycle was closing positions too early before TP
+        # Let positions reach their full TP targets
+        return {'should_recycle': False, 'reason': 'Recycle disabled - wait for TP'}
+        
         position = self.get_position(symbol)
         if not position:
             return {'should_recycle': False}
@@ -646,13 +656,18 @@ class MartingaleManager:
         # For SHORT: check if price has come down closer to average
         distance_to_avg = ((current_price - position.average_entry) / position.average_entry) * 100
         
-        # Recycle when price returns within 1% of average (small profit zone)
+        # Calculate actual P&L in USD
+        pnl_usd = (position.average_entry - current_price) * position.total_quantity
+        
+        # Recycle when price returns within 1% of average AND in profit
         if distance_to_avg <= 1 and distance_to_avg > -3:
-            return {
-                'should_recycle': True,
-                'reason': f'Price near average ({distance_to_avg:.1f}%), recycling margin',
-                'distance': distance_to_avg
-            }
+            if pnl_usd >= 1.0:  # Must have $1+ profit to recycle!
+                return {
+                    'should_recycle': True,
+                    'reason': f'Price near average ({distance_to_avg:.1f}%) + Profit ${pnl_usd:.2f}',
+                    'distance': distance_to_avg,
+                    'pnl_usd': pnl_usd
+                }
         
         return {'should_recycle': False, 'reason': f'Distance {distance_to_avg:.1f}%'}
     
