@@ -205,10 +205,12 @@ class MartingaleManager:
                 if position_amt >= 0 or entry_price <= 0:
                     continue
                 
-                # Calculate margin and estimate step based on quantity
+                # Get margin from Binance (prefer initialMargin, fallback to calculation)
                 quantity = abs(position_amt)
-                notional = quantity * entry_price
-                margin = notional / 10  # Assuming 10x leverage
+                margin = float(pos.get('initialMargin', 0)) or float(pos.get('isolatedMargin', 0))
+                if margin == 0:
+                    notional = quantity * entry_price
+                    margin = notional / 10  # Fallback to calculation
                 
                 # Estimate step based on margin
                 step = self._estimate_step_from_margin(margin)
@@ -825,8 +827,13 @@ class MartingaleManager:
                 
                 binance_symbols.add(symbol)
                 quantity = abs(position_amt)
-                notional = quantity * entry_price
-                margin = notional / 10  # Assuming 10x leverage
+                
+                # Use Binance's actual margin (prefer initialMargin, fallback to isolatedMargin)
+                margin = float(pos.get('initialMargin', 0)) or float(pos.get('isolatedMargin', 0))
+                if margin == 0:
+                    # Fallback: calculate from notional
+                    notional = quantity * entry_price
+                    margin = notional / 10
                 
                 if symbol in self.positions:
                     # Update existing position
