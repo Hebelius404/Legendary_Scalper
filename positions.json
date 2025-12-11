@@ -1,0 +1,70 @@
+{
+    "LRCUSDT": {
+        "step": 1,
+        "max_profit_usd": 3.938550000000001,
+        "trailing_tp_active": true,
+        "created_at": "2025-12-11T17:24:48.131590",
+        "last_step_time": "2025-12-11T17:24:48.131590",
+        "half_closed": false,
+        "entries": [
+            {
+                "price": 0.06604,
+                "quantity": 605.0,
+                "margin": 3.66349764,
+                "time": "2025-12-11T17:30:33.999595",
+                "recovered": true
+            }
+        ]
+    },
+    "JELLYJELLYUSDT": {
+        "step": 2,
+        "max_profit_usd": 0,
+        "trailing_tp_active": false,
+        "created_at": "2025-12-11T17:24:48.134233",
+        "last_step_time": "2025-12-11T17:24:48.134233",
+        "half_closed": false,
+        "entries": [
+            {
+                "price": 0.08625,
+                "quantity": 621.0,
+                "margin": 5.215158,
+                "time": "2025-12-11T17:30:34.002347",
+                "recovered": true
+            }
+        ]
+    },
+    "YALAUSDT": {
+        "step": 2,
+        "max_profit_usd": 16.507309999996497,
+        "trailing_tp_active": true,
+        "created_at": "2025-12-11T17:24:48.136614",
+        "last_step_time": "2025-12-11T17:24:48.136614",
+        "half_closed": false,
+        "entries": [
+            {
+                "price": 0.0372885468095,
+                "quantity": 2147.0,
+                "margin": 6.36028783,
+                "time": "2025-12-11T17:30:34.004811",
+                "recovered": true
+            }
+        ]
+    },
+    "LIGHTUSDT": {
+        "step": 6,
+        "max_profit_usd": 0,
+        "trailing_tp_active": false,
+        "created_at": "2025-12-11T17:24:48.139146",
+        "last_step_time": "2025-12-11T17:24:48.139146",
+        "half_closed": false,
+        "entries": [
+            {
+                "price": 1.092796970723,
+                "quantity": 311.0,
+                "margin": 38.44903948,
+                "time": "2025-12-11T17:30:34.006994",
+                "recovered": true
+            }
+        ]
+    }
+}

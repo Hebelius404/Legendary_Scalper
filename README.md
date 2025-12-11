@@ -32,15 +32,39 @@ An advanced, fully automated crypto trading bot designed for Binance Futures. It
     ```
 
 3.  **Setup Configuration**
-    Create a `.env` file in the root directory:
-    ```env
-    BINANCE_API_KEY=your_api_key
-    BINANCE_API_SECRET=your_api_secret
-    GROK_API_KEY=your_grok_api_key
-    ```
+    
+    1.  **Copy Environment Variables:**
+        Rename `.env.example` to `.env`.
+        ```bash
+        cp .env.example .env
+        ```
+    2.  **Fill in Credentials:**
+        Open `.env` and add your:
+        -   `SUPABASE_URL` and `SUPABASE_KEY` (from your Supabase Project)
+        -   `BINANCE_API_KEY` and `SECRET` (for the bot)
 
-4.  **Configure Bot**
+4.  **Database Setup (Supabase)** ☁️
+    
+    1.  Create a free project at [supabase.com](https://supabase.com).
+    2.  Go to the **SQL Editor** tab.
+    3.  Open `supabase_setup.sql` from this folder, copy the code, and run it.
+    4.  *(Optional)* Go to Project Settings -> API to get your URL and Anon Key.
+
+5.  **Configure Bot**
     Edit `config.py` to adjust risk settings, leverage, and martingale steps.
+
+6.  **Deploy Mobile Dashboard** 📱
+    *(Control the bot from your phone!)*
+    
+    1.  Go to the `deploy/` folder.
+    2.  Deploy it to Vercel/Netlify (Free):
+        ```bash
+        cd deploy
+        npx vercel --prod
+        ```
+    3.  Open the link on your phone.
+    4.  Enter your **Supabase URL & Key** (saved locally on your phone).
+    5.  You now have full remote control! 🚀
 
 ## 🚀 Usage
 
@@ -54,6 +78,20 @@ To switch to **Real Money**:
 1.  Open `config.py`
 2.  Set `USE_TESTNET = False`
 3.  Restart the bot.
+
+## 🔄 Recent Updates
+
+### ✅ Critical Bug Fixes Applied
+- **Smart Half-Close:** Now requires meaningful profit (Step 3: $3, Step 5: $5, etc.) before half-closing positions
+- **Margin Recycling:** Disabled to allow positions to reach full TP targets without premature reduction
+
+### 🧪 Visual Orders (Testnet Limitation)
+**Status:** Automatically **DISABLED** on Testnet, **ENABLED** on Live.
+
+Binance Testnet does not support `STOP_MARKET` or `TAKE_PROFIT` order types on the standard Futures endpoint. The bot operates normally (opens/closes positions, manages Martingale steps, tracks profit/loss) but will NOT place visual stop/TP lines on charts when `USE_TESTNET = True`.
+
+**To Enable Visual Orders:**
+Simply set `USE_TESTNET = False` in `config.py` and restart the bot. Visual orders will automatically activate on Live API.
 
 ## ⚠️ Disclaimer
 This software is for educational purposes only. Cryptocurrency trading involves high risk. The authors are not responsible for any financial losses incurred while using this bot. **Use at your own risk.**

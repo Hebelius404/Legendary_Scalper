@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legendary Scalper 🎰</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .card {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .stat-label {
+            color: #888;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.2rem;
+        }
+
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            text-align: center;
+        }
+
+        .btn-start {
+            background-color: #059669;
+            color: white;
+        }
+
+        .btn-stop {
+            background-color: #dc2626;
+            color: white;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .pnl-pos {
+            color: #4ade80;
+        }
+
+        .pnl-neg {
+            color: #f87171;
+        }
+
+        /* New Styles */
+        .step-pill {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #333;
+            color: #aaa;
+        }
+
+        .log-entry {
+            font-family: 'Consolas', monospace;
+            font-size: 0.7rem;
+            margin-bottom: 2px;
+            border-bottom: 1px solid #222;
+            padding-bottom: 2px;
+        }
+
+        .log-INFO {
+            color: #aaa;
+        }
+
+        .log-WARNING {
+            color: #fbbf24;
+        }
+
+        .log-ERROR {
+            color: #f87171;
+        }
+
+        .config-val {
+            font-family: monospace;
+            color: #60a5fa;
+        }
+    </style>
+</head>
+
+<body class="p-4 max-w-md mx-auto">
+
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-yellow-600">
+                LEGENDARY</h1>
+            <p class="text-xs text-gray-500">Remote Control • Live</p>
+        </div>
+        <div id="connectionStatus" class="h-3 w-3 rounded-full bg-red-500 shadow-[0_0_10px_red]"></div>
+    </div>
+
+    <!-- Main Stats -->
+    <div class="grid grid-cols-2 gap-3 mb-4">
+        <div class="card p-4">
+            <div class="stat-label">Balance</div>
+            <div class="stat-value" id="balance">$0.00</div>
+        </div>
+        <div class="card p-4">
+            <div class="stat-label">Active Pos</div>
+            <div class="stat-value" id="activePos">0</div>
+        </div>
+        <div class="card col-span-2 p-4">
+            <div class="stat-label">Unrealized PnL</div>
+            <div class="stat-value text-2xl" id="pnl">$0.00</div>
+        </div>
+    </div>
+
+    <!-- Live Config -->
+    <div class="card p-3 mb-6 bg-[#181818]">
+        <div class="grid grid-cols-3 gap-2 text-center text-xs">
+            <div>
+                <div class="text-gray-600 uppercase text-[0.6rem]">Min Pump</div>
+                <div class="font-bold text-yellow-500" id="cfgPump">--%</div>
+            </div>
+            <div>
+                <div class="text-gray-600 uppercase text-[0.6rem]">Max Margin</div>
+                <div class="font-bold text-blue-500" id="cfgMargin">$---</div>
+            </div>
+            <div>
+                <div class="text-gray-600 uppercase text-[0.6rem]">Max Pos</div>
+                <div class="font-bold text-purple-500" id="cfgPos">--</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="mb-8">
+        <div id="controlsRunning" class="hidden">
+            <button onclick="sendCommand('STOP')"
+                class="btn btn-stop shadow-lg shadow-red-900/40 border-b-4 border-red-900 active:border-b-0 active:translate-y-1">STOP
+                BOT ⛔</button>
+            <p class="text-center text-[0.65rem] text-green-500 mt-2 animate-pulse uppercase tracking-widest">● Bot is
+                Running</p>
+        </div>
+        <div id="controlsStopped">
+            <button onclick="sendCommand('START')"
+                class="btn btn-start shadow-lg shadow-green-900/40 border-b-4 border-green-900 active:border-b-0 active:translate-y-1">START
+                BOT 🚀</button>
+            <p class="text-center text-[0.65rem] text-gray-500 mt-2 uppercase tracking-widest">● Bot is Stopped</p>
+        </div>
+    </div>
+
+    <!-- Positions List -->
+    <h2 class="text-sm font-bold text-gray-400 uppercase mb-3 tracking-wider">Active Positions</h2>
+    <div id="positionsList" class="space-y-3 mb-8">
+        <div class="text-center text-gray-700 py-8 text-sm italic">No active positions</div>
+    </div>
+
+    <!-- Logs -->
+    <div class="flex justify-between items-end mb-2">
+        <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider">Live Logs</h2>
+        <span class="text-[0.6rem] text-gray-600">Auto-scroll</span>
+    </div>
+    <div id="logs" class="bg-black rounded-lg p-2 h-48 overflow-y-auto border border-gray-800 shadow-inner">
+        <!-- Logs populated by JS -->
+    </div>
+
+    <!-- Debug Toggle -->
+    <div class="mt-4 text-center">
+        <button onclick="document.getElementById('debugData').classList.toggle('hidden')"
+            class="text-xs text-gray-700 underline hover:text-gray-500">
+            Show Debug Data
+        </button>
+        <pre id="debugData"
+            class="hidden mt-2 p-2 bg-black text-[0.6rem] text-green-500 overflow-x-auto text-left rounded border border-gray-800 h-32"></pre>
+    </div>
+
+    <script>
+        // CONFIGURATION
+        const SUPABASE_URL = "https://rzwjvmtypqmnrjcxaymy.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6d2p2bXR5cHFtbnJqY3hheW15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0MDA0MDYsImV4cCI6MjA4MDk3NjQwNn0.FtQNBLhk43cG3CrbkaQ2rmhM60xeMKuvNumaA8mh5xg";
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const botId = 1;
+
+        // Elements
+        const elBalance = document.getElementById('balance');
+        const elActivePos = document.getElementById('activePos');
+        const elPnl = document.getElementById('pnl');
+        const elPositions = document.getElementById('positionsList');
+        const elLogs = document.getElementById('logs');
+        const elConn = document.getElementById('connectionStatus');
+
+        // Config Elements
+        const elCfgPump = document.getElementById('cfgPump');
+        const elCfgMargin = document.getElementById('cfgMargin');
+        const elCfgPos = document.getElementById('cfgPos');
+
+        // State
+        let isRunning = false;
+        let lastLogTime = null;
+
+        async function init() {
+            console.log("Initializing...");
+
+            // 1. Initial State Fetch
+            const { data, error } = await supabase.from('bot_state').select('*').eq('id', botId).single();
+            if (data) updateUI(data);
+
+            // 2. Initial Logs Fetch (Last 50)
+            fetchLogs();
+
+            // 3. Realtime Subscription (State)
+            supabase.channel('bot-monitor')
+                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bot_state', filter: `id=eq.${botId}` },
+                    payload => {
+                        updateUI(payload.new);
+                        flashConnection();
+                    }
+                )
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' },
+                    payload => {
+                        addLog(payload.new);
+                    }
+                )
+                .subscribe();
+        }
+
+        async function fetchLogs() {
+            const { data } = await supabase.from('logs')
+                .select('*')
+                .order('timestamp', { ascending: false })
+                .limit(50);
+
+            if (data) {
+                // Reverse to show oldest first in the list (since we append)
+                // actually better to prepend? Standard terminal flows down.
+                // So clear and add in chronological order.
+                elLogs.innerHTML = '';
+                data.reverse().forEach(log => addLog(log));
+            }
+        }
+
+        function addLog(log) {
+            const div = document.createElement('div');
+            const time = new Date(log.timestamp).toLocaleTimeString([], { hour12: false });
+            div.className = `log-entry log-${log.level}`;
+            div.innerHTML = `<span class="opacity-50">[${time}]</span> ${log.message}`;
+            elLogs.appendChild(div);
+            elLogs.scrollTop = elLogs.scrollHeight;
+        }
+
+        function updateUI(state) {
+            if (!state) return;
+
+            // Stats
+            elBalance.textContent = `$${state.balance.toFixed(2)}`;
+            elActivePos.textContent = state.active_positions_count;
+
+            const pnl = state.total_pnl;
+            elPnl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+            elPnl.className = `stat-value text-2xl ${pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
+
+            // DEBUG
+            document.getElementById('debugData').textContent = JSON.stringify(state, null, 2);
+
+            // Running State
+            isRunning = state.is_running;
+            if (isRunning) {
+                document.getElementById('controlsRunning').classList.remove('hidden');
+                document.getElementById('controlsStopped').classList.add('hidden');
+            } else {
+                document.getElementById('controlsRunning').classList.add('hidden');
+                document.getElementById('controlsStopped').classList.remove('hidden');
+            }
+
+            // Positions & Config
+            // Handle both old format (direct dict) and new format (wrapper)
+            let positions = {};
+            let config = {};
+
+            try {
+                let json = {};
+                if (typeof state.positions_json === 'object') {
+                    json = state.positions_json || {};
+                } else if (typeof state.positions_json === 'string') {
+                    json = JSON.parse(state.positions_json || '{}');
+                }
+
+                console.log("Parsed State:", json); // DEBUG
+
+                if (json.positions) {
+                    // New Format
+                    positions = json.positions;
+                    config = json.config || {};
+                } else {
+                    // Old Format (just positions)
+                    positions = json;
+                }
+            } catch (e) { console.error("JSON Parse error", e); }
+
+            renderPositions(positions, config);
+            renderConfig(config);
+        }
+
+        function renderConfig(config) {
+            if (config.min_pump) elCfgPump.textContent = `${config.min_pump}%`;
+            if (config.max_margin) elCfgMargin.textContent = `$${config.max_margin}`;
+            if (config.max_positions) elCfgPos.textContent = `${config.max_positions}`;
+        }
+
+        function renderPositions(positions, config) {
+            elPositions.innerHTML = '';
+            const symbols = Object.keys(positions);
+
+            if (symbols.length === 0) {
+                elPositions.innerHTML = '<div class="text-center text-gray-700 py-8 text-sm italic">No active positions</div>';
+                return;
+            }
+
+            symbols.forEach(sym => {
+                const pos = positions[sym];
+                const pnl = pos.unrealized_pnl;
+                const totalSteps = config.steps ? config.steps.length : '?';
+
+                // Calculate logic for progress bar
+                // e.g. Step 3 of 9
+                const stepPct = (pos.step / (config.steps ? config.steps.length : 10)) * 100;
+
+                const card = document.createElement('div');
+                card.className = 'bg-[#1e1e1e] border border-gray-800 rounded-lg p-3';
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <div class="font-bold text-lg leading-none">${sym}</div>
+                            <div class="text-[0.65rem] text-gray-500 mt-1 uppercase tracking-wide">
+                                Step <span class="text-white">${pos.step}</span><span class="opacity-50">/${totalSteps}</span> 
+                                • $${pos.total_margin.toFixed(1)} Mrg
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-mono ${pnl >= 0 ? 'text-green-400' : 'text-red-400'} font-bold text-sm">
+                                ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}
+                            </div>
+                            <div class="text-[0.65rem] text-gray-600">Entry: ${pos.average_entry.toFixed(4)}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden flex">
+                        <div class="bg-blue-600 h-full" style="width: ${stepPct}%"></div>
+                    </div>
+                `;
+                elPositions.appendChild(card);
+            });
+        }
+
+        async function sendCommand(cmd) {
+            const { error } = await supabase.from('commands').insert({
+                command: cmd,
+                status: 'PENDING'
+            });
+            if (error) alert('Failed to send command');
+        }
+
+        function flashConnection() {
+            elConn.classList.remove('bg-red-500', 'shadow-[0_0_10px_red]');
+            elConn.classList.add('bg-green-500', 'shadow-[0_0_10px_green]', 'animate-pulse');
+            setTimeout(() => {
+                elConn.classList.remove('animate-pulse');
+            }, 500);
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

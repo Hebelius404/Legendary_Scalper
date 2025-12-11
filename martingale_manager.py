@@ -2,6 +2,8 @@
 Martingale Manager - Handle step-based counter-trend positions
 """
 
+import os
+import json
 import time
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
@@ -28,6 +30,11 @@ class MartingalePosition:
     # Trailing TP fields
     trailing_tp_active: bool = False  # True when in trailing mode
     max_profit_usd: float = 0  # Maximum profit reached (for trailing)
+    # Visual orders tracking
+    stop_order_id: Optional[int] = None  # Emergency stop order
+    tp_order_id: Optional[int] = None  # Take profit order
+    trailing_order_id: Optional[int] = None  # Trailing stop order
+    step_order_ids: List[int] = field(default_factory=list)  # Martingale step limit orders
 
 
 @dataclass
@@ -223,6 +230,7 @@ class MartingaleManager:
                         'price': entry_price,
                         'quantity': quantity,
                         'margin': margin,
+                        'time': datetime.now(),
                         'recovered': True
                     }],
                     step=step,
@@ -239,10 +247,15 @@ class MartingaleManager:
                 logger.info(f"   Estimated Step: {step} | Margin: ${margin:.2f}")
                 logger.info(f"   UPnL: ${unrealized_pnl:.2f}")
             
-            if recovered > 0:
-                logger.info(f"✅ Recovered {recovered} positions from Binance")
+            if self.positions:
+                logger.info(f"✅ Recovered {len(self.positions)} positions from Binance")
+                
+                # Load extended state (trailing, max profit) from local JSON
+                self.load_positions_state()
+                
+                return len(self.positions)
             
-            return recovered
+            return 0
             
         except Exception as e:
             logger.error(f"Failed to recover positions: {e}")
@@ -339,6 +352,12 @@ class MartingaleManager:
                 
                 logger.info(f"🎰 Martingale Step 1: {symbol} SHORT")
                 logger.info(f"   Entry: {current_price:.6f} | Margin: ${margin}")
+                
+                # Place visual orders (stop, TP)
+                self.place_visual_orders(symbol)
+                
+                # Save persistence
+                self.save_positions_state()
                 
                 return True
             
@@ -493,6 +512,12 @@ class MartingaleManager:
                 logger.info(f"   Price: {current_price:.6f} | Margin: ${margin}")
                 logger.info(f"   New Avg: {position.average_entry:.6f} | Total Margin: ${position.total_margin}")
                 
+                # Update visual orders (new avg entry)
+                self.update_visual_orders(symbol)
+                
+                # Save persistence
+                self.save_positions_state()
+                
                 return True
                 
         except Exception as e:
@@ -574,6 +599,9 @@ class MartingaleManager:
                 logger.info(f"🎰 Half-Close: {symbol}")
                 logger.info(f"   Closed: {half_quantity:.4f} @ {current_price:.6f}")
                 logger.info(f"   P&L: ${pnl:.2f}")
+                
+                # Save persistence
+                self.save_positions_state()
                 
                 return True
                 
@@ -784,8 +812,14 @@ class MartingaleManager:
                 if pnl < 0 and ("stop" in reason.lower() or "emergency" in reason.lower() or "hard" in reason.lower()):
                     self.dynamic_blacklist.record_stop_loss(symbol, reason, pnl)
                 
+                # Cancel visual orders
+                self.cancel_visual_orders(symbol)
+                
                 # Remove position
                 del self.positions[symbol]
+                
+                # Save persistence
+                self.save_positions_state()
                 
                 return True
                 
@@ -859,17 +893,22 @@ class MartingaleManager:
                     # Check for significant differences
                     qty_diff = abs(local_pos.total_quantity - quantity)
                     if qty_diff > 0.001 * quantity:  # More than 0.1% difference
+                        old_step = local_pos.step
                         local_pos.total_quantity = quantity
                         local_pos.total_margin = margin
                         local_pos.average_entry = entry_price
+                        # Recalculate step based on new margin (handles step limit order fills)
+                        local_pos.step = self._estimate_step_from_margin(margin)
                         results['updated'].append({
                             'symbol': symbol,
                             'old_qty': old_qty,
                             'new_qty': quantity,
                             'old_margin': old_margin,
-                            'new_margin': margin
+                            'new_margin': margin,
+                            'old_step': old_step,
+                            'new_step': local_pos.step
                         })
-                        logger.info(f"🔄 Synced {symbol}: Qty {old_qty:.4f}→{quantity:.4f}, Margin ${old_margin:.2f}→${margin:.2f}")
+                        logger.info(f"🔄 Synced {symbol}: Qty {old_qty:.4f}→{quantity:.4f}, Margin ${old_margin:.2f}→${margin:.2f}, Step {old_step}→{local_pos.step}")
                 else:
                     # Position exists on Binance but not tracked locally - add it
                     step = self._estimate_step_from_margin(margin)
@@ -909,23 +948,315 @@ class MartingaleManager:
         
         return results
     
+    def place_visual_orders(self, symbol: str):
+        """
+        Place visual orders for a position (stop, TP, and step limits)
+        """
+        # DISABLED BY USER REQUEST - Relying on Internal Logic + Dashboard
+        return
+        
+        position = self.get_position(symbol)
+        if not position:
+            return
+        
+        try:
+            # Cancel any existing orders first
+            self.cancel_visual_orders(symbol)
+            
+            # 1. Emergency stop - 35% above average
+            emergency_stop_price = position.average_entry * 1.35
+            stop_order = self.client.place_stop_market(
+                symbol=symbol,
+                side='BUY',  # Close SHORT
+                quantity=position.total_quantity,
+                stop_price=emergency_stop_price
+            )
+            if stop_order:
+                position.stop_order_id = stop_order.get('orderId')
+                logger.info(f"📍 Emergency stop placed @ {emergency_stop_price:.6f}")
+            
+            # 2. NO Take Profit orders - ALL steps use trailing logic for exits
+            # Trailing activates when profit reaches threshold, then tracks max profit
+            # and closes when profit drops 30% from peak
+            logger.info(f"📊 No TP visual order - trailing handles exit for Step {position.step}")
+            
+            # 3. Step limit orders - DISABLED
+            # These orders fill automatically on Binance and break internal tracking
+            # The bot's step management expects to control when steps are added
+            # For now, only show step entries via the bot's internal logic
+            logger.info(f"📊 Visual orders: Emergency Stop only (step entries managed internally)")
+            
+            logger.info(f"✅ Visual orders placed for {symbol}")
+        except Exception as e:
+            logger.error(f"Failed to place visual orders for {symbol}: {e}")
+    
+    def global_cleanup_visual_orders(self):
+        """Cancel ALL conditional orders on startup to clean up orphans from closed positions"""
+        try:
+            # Get all open algo orders (no symbol filter = all symbols)
+            algo_orders = self.client.get_open_algo_orders()
+            if not algo_orders:
+                return
+            
+            cancelled_count = 0
+            for order in algo_orders:
+                symbol = order.get('symbol')
+                algo_id = order.get('algoId')
+                if algo_id and self.client.cancel_order(symbol, algo_id):
+                    cancelled_count += 1
+            
+            if cancelled_count > 0:
+                logger.info(f"🧹 Global cleanup: Cancelled {cancelled_count} orphaned algo orders")
+        except Exception as e:
+            logger.debug(f"Error during global cleanup: {e}")
+    
+    def cancel_all_conditional_orders(self, symbol: str):
+        """Cancel all open conditional (algo) orders for a symbol to prevent duplicates"""
+        try:
+            cancelled_count = 0
+            
+            # Check BOTH standard and algo order endpoints
+            standard_orders = self.client.get_open_orders(symbol)
+            algo_orders = self.client.get_open_algo_orders(symbol)
+            
+            # Cancel standard conditional orders
+            for order in standard_orders:
+                if order.get('type') in ['STOP_MARKET', 'TAKE_PROFIT_MARKET', 'STOP', 'TAKE_PROFIT']:
+                    order_id = order.get('orderId')
+                    if self.client.cancel_order(symbol, order_id):
+                        cancelled_count += 1
+            
+            # Cancel algo orders
+            for order in algo_orders:
+                algo_id = order.get('algoId')
+                if algo_id and self.client.cancel_order(symbol, algo_id):
+                    cancelled_count += 1
+            
+            if cancelled_count > 0:
+                logger.info(f"🧹 Cleaned up {cancelled_count} duplicate conditional orders for {symbol}")
+        except Exception as e:
+            logger.debug(f"Error cleaning up orders for {symbol}: {e}")
+    
+    def update_visual_orders(self, symbol: str):
+        """
+        Update visual orders after a step is added (new average entry)
+        """
+        position = self.get_position(symbol)
+        if not position:
+            return
+        
+        try:
+            # Cancel and re-place all orders with new average
+            logger.info(f"🔄 Updating visual orders for {symbol} (new avg: {position.average_entry:.6f})")
+            self.place_visual_orders(symbol)
+            
+        except Exception as e:
+            logger.error(f"Failed to update visual orders for {symbol}: {e}")
+    
+    def activate_trailing_mode(self, symbol: str):
+        """
+        Trailing Activated: Cancel TP and move Stop to slightly above BE
+        """
+        position = self.get_position(symbol)
+        if not position:
+            return
+        
+        try:
+            # Clean up any duplicate orders first
+            self.cancel_all_conditional_orders(symbol)
+            
+            # 1. Cancel TP (let profit run)
+            if position.tp_order_id:
+                success = self.client.cancel_order(symbol, position.tp_order_id)
+                if success:
+                    position.tp_order_id = None
+                    logger.info(f"✨ Trailing Active: Cancelled TP visual order for {symbol}")
+            
+            # 2. Move Stop to secure profit (tighter than emergency stop)
+            # SHORT: Stop should be slightly below entry to lock in profit
+            # If price rises back to this level, we exit with small profit secured
+            profit_protection_stop = position.average_entry * 0.9985  # 0.15% below entry
+            
+            if position.stop_order_id:
+                self.client.cancel_order(symbol, position.stop_order_id)
+            
+            # Place new protective stop (tighter than emergency stop)
+            stop_order = self.client.place_stop_market(
+                symbol=symbol,
+                side='BUY',
+                quantity=position.total_quantity,
+                stop_price=profit_protection_stop
+            )
+            if stop_order:
+                position.stop_order_id = stop_order.get('algoId') or stop_order.get('orderId')
+                logger.info(f"📍 Moved Stop to {profit_protection_stop:.6f} (0.15% below entry = profit secured)")
+                
+        except Exception as e:
+            logger.error(f"Failed to activate visual trailing for {symbol}: {e}")
+    
+    def cancel_visual_orders(self, symbol: str):
+        """
+        Cancel all visual orders for a position
+        """
+        position = self.get_position(symbol)
+        if not position:
+            return
+        
+        try:
+            # Cancel emergency stop
+            if position.stop_order_id:
+                self.client.cancel_order(symbol, position.stop_order_id)
+                position.stop_order_id = None
+            
+            # Cancel TP
+            if position.tp_order_id:
+                self.client.cancel_order(symbol, position.tp_order_id)
+                position.tp_order_id = None
+            
+            # Cancel trailing stop
+            if position.trailing_order_id:
+                self.client.cancel_order(symbol, position.trailing_order_id)
+                position.trailing_order_id = None
+            
+            # Cancel step limit orders
+            for order_id in position.step_order_ids:
+                self.client.cancel_order(symbol, order_id)
+            position.step_order_ids = []
+            
+            logger.debug(f"Cancelled visual orders for {symbol}")
+            
+        except Exception as e:
+            logger.error(f"Failed to cancel visual orders for {symbol}: {e}")
+    
+    def recover_visual_orders(self, symbol: str):
+        """
+        Recover/verify visual orders on bot restart
+        """
+        # DISABLED BY USER REQUEST
+        return
+        
+        position = self.get_position(symbol)
+        if not position:
+            return
+        
+        try:
+            # Clean up ALL conditional orders for this symbol (prevents duplicates)
+            logger.info(f"🔧 Recovering visual orders for {symbol}")
+            self.cancel_all_conditional_orders(symbol)
+            
+            # Place fresh orders
+            self.place_visual_orders(symbol)
+            
+        except Exception as e:
+            logger.error(f"Failed to recover visual orders for {symbol}: {e}")
+    
+    def get_balance(self) -> float:
+        """Get current USDT balance"""
+        try:
+            return float(self.client.get_balance(asset='USDT'))
+        except:
+            return 0.0
+
+    
+    # =========================================================================
+    # PERSISTENCE (Local JSON)
+    # =========================================================================
+    
+    def save_positions_state(self):
+        """Save current positions state to JSON file"""
+        try:
+            data = {}
+            for symbol, pos in self.positions.items():
+                data[symbol] = {
+                    'step': pos.step,
+                    'max_profit_usd': pos.max_profit_usd,
+                    'trailing_tp_active': pos.trailing_tp_active,
+                    'created_at': pos.created_at.isoformat(),
+                    'last_step_time': pos.last_step_time.isoformat(),
+                    'half_closed': pos.half_closed,
+                    'entries': [
+                        {**entry, 'time': entry.get('time', datetime.now()).isoformat() if isinstance(entry.get('time'), datetime) else entry.get('time', str(datetime.now()))}
+                        for entry in pos.entries
+                    ]
+                }
+            
+            with open('positions.json', 'w') as f:
+                json.dump(data, f, indent=4)
+                
+        except Exception as e:
+            logger.error(f"Failed to save positions state: {e}")
+
+    def load_positions_state(self):
+        """
+        Load extended position state (trailing info, steps) from JSON
+        and merge with recovered Binance positions.
+        """
+        try:
+            if not os.path.exists('positions.json'):
+                return
+
+            with open('positions.json', 'r') as f:
+                saved_data = json.load(f)
+            
+            loaded_count = 0
+            for symbol, saved_pos in saved_data.items():
+                if symbol in self.positions:
+                    pos = self.positions[symbol]
+                    
+                    # Restore critical state
+                    pos.step = saved_pos.get('step', pos.step)
+                    pos.max_profit_usd = saved_pos.get('max_profit_usd', 0)
+                    pos.trailing_tp_active = saved_pos.get('trailing_tp_active', False)
+                    pos.half_closed = saved_pos.get('half_closed', False)
+                    
+                    # Restore timestamps
+                    if 'created_at' in saved_pos:
+                        pos.created_at = datetime.fromisoformat(saved_pos['created_at'])
+                    if 'last_step_time' in saved_pos:
+                        pos.last_step_time = datetime.fromisoformat(saved_pos['last_step_time'])
+                        
+                    loaded_count += 1
+            
+            if loaded_count > 0:
+                logger.info(f"💾 Loaded extended state for {loaded_count} positions from JSON")
+                
+        except Exception as e:
+            logger.error(f"Failed to load positions state: {e}")
+
     def get_status(self) -> Dict:
-        """Get status of all Martingale positions"""
-        status = {
-            'active_positions': len(self.positions),
-            'positions': {}
-        }
+        """
+        Get current martingale status for UI/Logging
+        """
+        active_positions = len(self.positions)
+        positions_data = {}
+        
+        total_margin = 0
+        total_unrealized_pnl = 0
         
         for symbol, pos in self.positions.items():
-            status['positions'][symbol] = {
+            # Get current price
+            current_price = float(self.client.get_mark_price(symbol).get('markPrice', 0))
+            
+            # Calc PnL (Short): (Entry - Current) * Qty
+            pnl = (pos.average_entry - current_price) * pos.total_quantity
+            
+            positions_data[symbol] = {
                 'step': pos.step,
                 'total_margin': pos.total_margin,
                 'average_entry': pos.average_entry,
-                'half_closed': pos.half_closed,
-                'entries': len(pos.entries)
+                'total_quantity': pos.total_quantity,
+                'unrealized_pnl': pnl,
+                'current_price': current_price
             }
-        
-        return status
+            total_margin += pos.total_margin
+            total_unrealized_pnl += pnl
+            
+        return {
+            'active_positions': active_positions,
+            'total_margin': total_margin,
+            'total_unrealized_pnl': total_unrealized_pnl,
+            'positions': positions_data
+        }
 
 
 if __name__ == "__main__":

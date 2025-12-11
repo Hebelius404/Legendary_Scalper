@@ -15,7 +15,9 @@ Finds pumped coins (20%+) and shorts on exhaustion signals
 
 import sys
 import time
+import threading # Added for SupabaseLogHandler
 import signal as sig
+import logging # Added for SupabaseLogHandler
 from datetime import datetime, timezone
 
 import config
@@ -26,6 +28,22 @@ from martingale_manager import MartingaleManager
 from position_watcher import PositionWatcher
 from grok_client import GrokClient
 from logger import logger
+from supabase_client import supabase_manager # Remote Control
+
+class SupabaseLogHandler(logging.Handler):
+    """Sends logs to Supabase"""
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            # Run in thread to avoid blocking main loop
+            threading.Thread(target=supabase_manager.log, args=(record.levelname, msg)).start()
+        except:
+            pass
+
+# Attach Handler
+supabase_handler = SupabaseLogHandler()
+supabase_handler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)s | %(message)s', datefmt='%H:%M:%S'))
+logger.addHandler(supabase_handler)
 
 
 class LegendaryScalper:
@@ -100,6 +118,13 @@ class LegendaryScalper:
             # Sync to ensure internal state matches Binance
             self.martingale.sync_positions()
             
+            # Global cleanup: remove ALL orphaned visual orders from closed positions
+            self.martingale.global_cleanup_visual_orders()
+            
+            # Recover visual orders for all active positions
+            for symbol in self.martingale.positions:
+                self.martingale.recover_visual_orders(symbol)
+            
             # Initial pump scan
             logger.info("🔍 Scanning for pumped coins...")
             pumped = self.pump_detector.find_pumped_coins()
@@ -154,6 +179,15 @@ class LegendaryScalper:
                         continue
                     logger.info(f"📊 1h Check: {symbol} - {trend_check.get('reason')}")
                     
+                    # Check RSI - only enter when overbought (RSI > 70)
+                    rsi = self.client.calculate_rsi(symbol)
+                    min_rsi = getattr(config, 'MARTINGALE_MIN_RSI', 70)
+                    if rsi > 0 and rsi < min_rsi:
+                        logger.info(f"⏭️ Skipping {symbol} - RSI {rsi:.1f} < {min_rsi} (not overbought)")
+                        continue
+                    if rsi > 0:
+                        logger.info(f"📊 RSI Check: {symbol} RSI={rsi:.1f} ✅ (>{min_rsi})")
+                    
                     # Check Grok sentiment for high pumps
                     if self.grok and pump >= 40:
                         sentiment = self.grok.is_good_short_entry(symbol, pump)
@@ -171,56 +205,145 @@ class LegendaryScalper:
         
         # 4. Log status
         self.watcher.log_status()
+        
+        # 5. Sync to Supabase (Remote Control)
+        # Get full status
+        status = self.martingale.get_status()
+        # Add extra info
+        status['is_running'] = self.running
+        status['balance'] = self.martingale.get_balance()
+        
+        # Push state
+        supabase_manager.sync_state(status)
+        
+        # Check for remote commands
+        commands = supabase_manager.poll_commands()
+        for cmd in commands:
+            command_type = cmd.get('command')
+            if command_type == 'STOP':
+                logger.info("📱 Received remote STOP command!")
+                self.running = False
+            elif command_type == 'START': # Already running, but good to ack
+                logger.info("📱 Received remote START command (already running)")
+
     
+    def process_remote_commands(self) -> bool:
+        """
+        Check for remote commands and update state. 
+        Returns True if state changed (e.g. Start -> Stop).
+        """
+        changed = False
+        try:
+            commands = supabase_manager.poll_commands()
+            for cmd in commands:
+                command_type = cmd.get('command')
+                if command_type == 'START' and not self.running:
+                    logger.info("🚀 Received remote START command!")
+                    self.running = True
+                    changed = True
+                elif command_type == 'STOP' and self.running:
+                    logger.info("📱 Received remote STOP command!")
+                    self.running = False
+                    changed = True
+        except Exception as e:
+            logger.error(f"Command processing error: {e}")
+            
+        return changed
+
+    def smart_sleep(self, duration: float):
+        """
+        Sleep for 'duration' seconds, but check for commands every 0.5s.
+        Returns early if state changes.
+        """
+        interval = 0.5
+        end_time = time.time() + duration
+        
+        while time.time() < end_time:
+            # Poll for commands
+            if self.process_remote_commands():
+                # State changed (e.g. STOP received), exit sleep immediately
+                return
+            
+            # Calculate sleep time
+            remaining = end_time - time.time()
+            if remaining <= 0:
+                break
+                
+            time.sleep(min(remaining, interval))
+    
+    def _get_full_status(self):
+        """Helper to build full status dict for Supabase"""
+        status = self.martingale.get_status()
+        status['is_running'] = self.running
+        status['balance'] = self.martingale.get_balance()
+        status['config'] = {
+            'min_pump': config.MARTINGALE_MIN_PUMP,
+            'max_margin': sum(config.MARTINGALE_STEPS),
+            'max_positions': config.MAX_OPEN_POSITIONS,
+            'steps': config.MARTINGALE_STEPS
+        }
+        return status
+
     def run(self):
-        """Main loop"""
+        """
+        Main Application Loop: Handles transitions between STANDBY and TRADING
+        """
         if not self.startup_checks():
             logger.error("Startup failed!")
             return
-        
-        self.running = True
-        
-        # Print banner
-        print("\n" + "="*65)
-        print("🎰 LEGENDARY MARTINGALE SCALPER 🎰")
+
+        logger.info("📡 Bot is ready. Waiting for commands...")
         print("="*65)
-        print("Strategy: Counter-Trend SHORT on Pumped Coins")
-        print(f"Min Pump: {config.MARTINGALE_MIN_PUMP}%")
-        print(f"Max Margin: ${sum(config.MARTINGALE_STEPS)}")
-        print(f"Mode: {'TESTNET' if config.USE_TESTNET else 'PRODUCTION'}")
-        print("="*65 + "\n")
-        
-        logger.info("🚀 Starting main loop...")
-        logger.info("Press Ctrl+C to stop")
-        
+        print("🤖 BOT IS ONLINE")
+        print("📡 Status: STANDBY (Waiting for remote START)")
+        print("="*65)
+
         try:
-            while self.running:
-                self.run_cycle()
-                time.sleep(config.SCAN_INTERVAL_SECONDS)
-                
+            while True:
+                # 1. Initial Check (in case we loop back fast)
+                if self.process_remote_commands():
+                    # If state changed (START/STOP), sync IMMEDIATELY so dashboard updates fast
+                    logger.info(f"🔄 State change detected. Syncing... (Running: {self.running})")
+                    supabase_manager.sync_state(self._get_full_status())
+
+                if self.running:
+                    # --- TRADING MODE ---
+                    self.run_cycle()
+                    
+                    # Log & Sync State
+                    supabase_manager.sync_state(self._get_full_status())
+                    
+                    # Responsive Sleep (10s -> polls every 0.5s)
+                    self.smart_sleep(config.SCAN_INTERVAL_SECONDS)
+                    
+                else:
+                    # --- STANDBY MODE ---
+                    # Sync Standby state WITH Config
+                    supabase_manager.sync_state(self._get_full_status())
+                    
+                    # Responsive Sleep (Sync every 5s, Poll every 0.5s)
+                    self.smart_sleep(5.0)
+
         except KeyboardInterrupt:
-            logger.info("⛔ Stopping bot...")
+            logger.info("⛔ Hard Stop received (Ctrl+C)")
             self.stop()
-    
+
+
+
     def stop(self):
-        """Stop the bot"""
+        """Stop the bot logic (remains in standby unless hard exit)"""
         self.running = False
+        logger.info("🛑 Bot trading logic stopped. Entering STANDBY mode.")
         
         # Log final status
-        status = self.martingale.get_status()
-        logger.info(f"📊 Final Status: {status['active_positions']} open positions")
-        
-        for symbol, pos in status['positions'].items():
-            logger.info(f"   {symbol}: Step {pos['step']}, Margin ${pos['total_margin']}")
-        
-        logger.info("👋 Bot stopped. Goodbye!")
-
+        if hasattr(self, 'martingale'):
+            status = self.martingale.get_status()
+            logger.info(f"📊 Final Status: {status['active_positions']} open positions")
 
 def signal_handler(signum, frame):
     """Handle Ctrl+C"""
-    logger.info("Received stop signal...")
+    logger.info("Received stop signal... Exiting.")
     sys.exit(0)
-
 
 if __name__ == "__main__":
     sig.signal(sig.SIGINT, signal_handler)

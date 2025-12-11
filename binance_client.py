@@ -128,6 +128,54 @@ class BinanceClient:
         }
         return self._request('GET', '/fapi/v1/klines', params)
     
+    def calculate_rsi(self, symbol: str, period: int = 14, interval: str = '15m') -> float:
+        """
+        Calculate RSI (Relative Strength Index) for a symbol
+        
+        Args:
+            symbol: Trading pair
+            period: RSI period (default 14)
+            interval: Kline interval (default 15m)
+        
+        Returns:
+            RSI value (0-100), or -1 if calculation fails
+        """
+        try:
+            # Get enough klines for RSI calculation
+            klines = self.get_klines(symbol, interval, limit=period + 10)
+            if not klines or len(klines) < period + 1:
+                return -1
+            
+            # Extract close prices
+            closes = [float(k[4]) for k in klines]
+            
+            # Calculate price changes
+            changes = []
+            for i in range(1, len(closes)):
+                changes.append(closes[i] - closes[i-1])
+            
+            # Separate gains and losses
+            gains = [max(0, c) for c in changes]
+            losses = [abs(min(0, c)) for c in changes]
+            
+            # Calculate average gain and loss
+            recent_gains = gains[-period:]
+            recent_losses = losses[-period:]
+            
+            avg_gain = sum(recent_gains) / period
+            avg_loss = sum(recent_losses) / period
+            
+            if avg_loss == 0:
+                return 100  # No losses = max RSI
+            
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+            
+            return round(rsi, 2)
+        except Exception as e:
+            logger.debug(f"RSI calculation failed for {symbol}: {e}")
+            return -1
+    
     def get_ticker_24h(self, symbol: str = None) -> Any:
         """Get 24h ticker statistics"""
         params = {}
@@ -282,6 +330,34 @@ class BinanceClient:
         }
         return self._request('POST', '/fapi/v1/order', params, signed=True)
     
+    def place_limit_order(self, symbol: str, side: str, quantity: float, price: float) -> Optional[Dict]:
+        """
+        Place a limit order (for martingale step entries)
+        
+        Args:
+            symbol: Trading pair
+            side: BUY or SELL
+            quantity: Order quantity
+            price: Limit price
+        """
+        try:
+            params = {
+                'symbol': symbol,
+                'side': side,
+                'type': 'LIMIT',
+                'quantity': self.round_quantity(symbol, quantity),
+                'price': self.round_price(symbol, price),
+                'timeInForce': 'GTC'  # Good Till Cancel
+            }
+            response = self._request('POST', '/fapi/v1/order', params, signed=True)
+            if response:
+                logger.info(f"📝 LIMIT order placed: {symbol} {side} {quantity} @ {price}")
+                return response
+        except Exception as e:
+            logger.error(f"Failed to place LIMIT order: {e}")
+        return None
+
+    
     def place_stop_loss(self, symbol: str, side: str, quantity: float, 
                         stop_price: float) -> Dict:
         """Place a stop-loss order"""
@@ -318,7 +394,25 @@ class BinanceClient:
         params = {}
         if symbol:
             params['symbol'] = symbol
-        return self._request('GET', '/fapi/v1/openOrders', params, signed=True)
+        try:
+            orders = self._request('GET', '/fapi/v1/openOrders', params, signed=True)
+            return orders if orders else []
+        except Exception as e:
+            logger.error(f"Failed to get open orders: {e}")
+            return []
+    
+    def get_open_algo_orders(self, symbol: str = None) -> List[Dict]:
+        """Get open algo orders (conditional orders placed via /fapi/v1/algoOrder)"""
+        try:
+            params = {}
+            if symbol:
+                params['symbol'] = symbol
+            
+            orders = self._request('GET', '/fapi/v1/openAlgoOrders', params, signed=True)
+            return orders if orders else []
+        except Exception as e:
+            logger.debug(f"Failed to get open algo orders: {e}")
+            return []
     
     # =========================================================================
     # Utility Methods
@@ -347,14 +441,152 @@ class BinanceClient:
         return 3
     
     def round_price(self, symbol: str, price: float) -> float:
-        """Round price to symbol precision"""
-        precision = self.get_price_precision(symbol)
-        return round(price, precision)
+        """Round price to symbol tick size from PRICE_FILTER"""
+        try:
+            info = self.get_symbol_info(symbol)
+            if info:
+                for f in info.get('filters', []):
+                    if f.get('filterType') == 'PRICE_FILTER':
+                        tick_size = float(f.get('tickSize', 0.00001))
+                        # Count decimals in tick size
+                        tick_str = f.get('tickSize', '0.00001')
+                        decimals = len(tick_str.split('.')[-1]) if '.' in tick_str else 0
+                        # Round down to nearest tick, then round to fix floating point errors
+                        result = int(price / tick_size) * tick_size
+                        return round(result, decimals)
+            # Fallback to precision
+            precision = self.get_price_precision(symbol)
+            multiplier = 10 ** precision
+            return round(int(price * multiplier) / multiplier, precision)
+        except:
+            return round(price, 6)
     
     def round_quantity(self, symbol: str, quantity: float) -> float:
         """Round quantity to symbol precision"""
         precision = self.get_quantity_precision(symbol)
         return round(quantity, precision)
+    
+    def cancel_order(self, symbol: str, order_id: int) -> bool:
+        """Cancel an algo order or standard order (tries both endpoints)"""
+        try:
+            # Try new algo order API first
+            params = {
+                'symbol': symbol,
+                'algoId': order_id
+            }
+            response = self._request('DELETE', '/fapi/v1/algoOrder', params, signed=True)
+            if response:
+                logger.info(f"✅ Cancelled algo order {order_id} for {symbol}")
+                return True
+            else:
+                logger.warning(f"Failed to cancel algoOrder {order_id}, trying standard endpoint...")
+        except Exception as e:
+            logger.debug(f"AlgoOrder cancel failed for {order_id}: {e}, trying standard endpoint...")
+            
+        # Fallback to standard order cancellation
+        try:
+            params = {
+                'symbol': symbol,
+                'orderId': order_id
+            }
+            response = self._request('DELETE', '/fapi/v1/order', params, signed=True)
+            if response:
+                logger.info(f"✅ Cancelled standard order {order_id} for {symbol}")
+                return True
+            else:
+                logger.error(f"Failed to cancel order {order_id} for {symbol} on both endpoints")
+        except Exception as e2:
+            logger.error(f"Both cancel attempts failed for order {order_id}: {e2}")
+        return False
+    
+    def place_stop_market(self, symbol: str, side: str, quantity: float, stop_price: float) -> Optional[Dict]:
+        """
+        Place a STOP_MARKET order using Testnet-compatible algoOrder API
+        
+        Args:
+            symbol: Trading pair
+            side: BUY or SELL
+            quantity: Order quantity
+            stop_price: Stop activation price
+        """
+        try:
+            params = {
+                'symbol': symbol,
+                'side': side,
+                'algoType': 'CONDITIONAL',
+                'type': 'STOP_MARKET',
+                'triggerPrice': self.round_price(symbol, stop_price),
+                'quantity': self.round_quantity(symbol, quantity),
+                'reduceOnly': 'true'
+            }
+            response = self._request('POST', '/fapi/v1/algoOrder', params, signed=True)
+            if response:
+                logger.info(f"📍 STOP order placed: {symbol} {side} @ {stop_price}")
+                return response
+        except Exception as e:
+            logger.error(f"Failed to place STOP order: {e}")
+        return None
+    
+    def place_take_profit_market(self, symbol: str, side: str, quantity: float, stop_price: float) -> Optional[Dict]:
+        """
+        Place a TAKE_PROFIT order using Testnet-compatible algoOrder API
+        
+        Args:
+            symbol: Trading pair
+            side: BUY or SELL
+            quantity: Order quantity
+            stop_price: TP activation price
+        """
+        try:
+            params = {
+                'symbol': symbol,
+                'side': side,
+                'algoType': 'CONDITIONAL',
+                'type': 'TAKE_PROFIT_MARKET',
+                'triggerPrice': self.round_price(symbol, stop_price),
+                'quantity': self.round_quantity(symbol, quantity),
+                'reduceOnly': 'true'
+            }
+            response = self._request('POST', '/fapi/v1/algoOrder', params, signed=True)
+            if response:
+                logger.info(f"🎯 TAKE_PROFIT order placed: {symbol} {side} @ {stop_price}")
+                return response
+        except Exception as e:
+            logger.error(f"Failed to place TAKE_PROFIT order: {e}")
+        return None
+    
+    def place_trailing_stop(self, symbol: str, side: str, quantity: float, callback_rate: float, activation_price: float = None) -> Optional[Dict]:
+        """
+        Place a TRAILING_STOP_MARKET order
+        
+        Args:
+            symbol: Trading pair
+            side: BUY or SELL
+            quantity: Order quantity
+            callback_rate: Callback rate (0.1 to 5.0 = 0.1% to 5%)
+            activation_price: Optional activation price
+        """
+        try:
+            params = {
+                'symbol': symbol,
+                'side': side,
+                'type': 'TRAILING_STOP_MARKET',
+                'callbackRate': callback_rate,
+                'quantity': self.round_quantity(symbol, quantity),
+                'reduceOnly': 'true'
+            }
+            
+            if activation_price:
+                params['activationPrice'] = self.round_price(symbol, activation_price)
+            
+            response = self._request('POST', '/fapi/v1/order', params, signed=True)
+            if response:
+                logger.info(f"🔄 TRAILING_STOP order placed: {symbol} {side} @ {callback_rate}%")
+                return response
+        except Exception as e:
+            logger.error(f"Failed to place TRAILING_STOP: {e}")
+        return None
+
 
 
 # Test connection when module is run directly

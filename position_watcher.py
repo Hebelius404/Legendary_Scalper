@@ -162,6 +162,7 @@ class PositionWatcher:
             # Update max profit if current is higher
             if pnl_usd > position.max_profit_usd:
                 position.max_profit_usd = pnl_usd
+                self.martingale.save_positions_state()
                 logger.debug(f"📈 {position.symbol}: New max profit ${pnl_usd:.2f}")
             
             # Check for 30% callback from max (THIS RUNS EVEN IF BELOW TARGET)
@@ -181,6 +182,7 @@ class PositionWatcher:
             if pnl_usd < 0.50:
                 position.trailing_tp_active = False
                 position.max_profit_usd = 0
+                self.martingale.save_positions_state()
                 logger.info(f"🔄 {position.symbol}: Trailing reset (profit ${pnl_usd:.2f})")
                 return {'should_close': False, 'pnl_usd': pnl_usd, 'tp_target': tp_target}
             
@@ -197,7 +199,11 @@ class PositionWatcher:
         if pnl_usd >= tp_target:
             position.trailing_tp_active = True
             position.max_profit_usd = pnl_usd
+            self.martingale.save_positions_state()
             logger.info(f"🎯 {position.symbol}: Trailing TP activated at ${pnl_usd:.2f}")
+            
+            # Activate visual trailing (Cancel TP, Move Stop to BE)
+            self.martingale.activate_trailing_mode(position.symbol)
             
             return {
                 'should_close': False, 
