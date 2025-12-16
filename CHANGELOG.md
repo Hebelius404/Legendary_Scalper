@@ -1,33 +1,51 @@
 # Changelog
 
-All notable changes to the Legendary Scalper project will be documented in this file.
+## [v1.7] (Safety Update) - 2025-12-16
+### New Features
+- **RSI Circuit Breaker:**
+    - Prevents adding Martingale steps if RSI > 90 (configurable via `MARTINGALE_RSI_MAX_LIMIT`).
+    - Stops the bot from "fighting the trend" during parabolic pumps ("God Candles").
+    - Displays `🚫 RSI Circuit Breaker` warning in logs.
+- **Dynamic Step Spacing (Volatility Adaptive):**
+    - Automatically widens the distance between steps during high volatility.
+    - Uses a `Volatility Multiplier` (1.0x - 3.0x) based on the ratio of the current candle size to the average range.
+    - Reduces margin exposure during rapid price moves by requiring deeper pullbacks for step entries.
 
-## [1.6.1] - 2025-12-14
+### Fixes
+- **Dashboard:** Updated version tag to v1.7.
 
-### Added
-- **Enhanced Log Visibility:** Added explicit terminal logs for the bot's scanning cycle.
-    - `🔍 Scanning for pumped coins...` (Every 90s)
-    - `⏸️ Scan skipped: Max positions reached` (Clear feedback when fully loaded)
+## [v1.6.1] (Balance Fix) - 2025-12-16
+### Fixes
+- **Balance Calculation:** Update balance display to show Wallet Balance (Total Equity) instead of Available Balance.    
 
-### Fixed
-- **Safety:** Enabled **Hard Stop** functionality. Previously, it only logged a warning. Now it will actively close positions that hit the `$100` USD loss or `35%` drawdown limit.
-- **Dashboard:**
-    - Fixed **Balance Display** (was showing $0.00).
-    - Added **Total P&L (All Time)** card. This tracks your lifetime profits persistently in `total_pnl.json` (survives restarts).
-    - Added **Win Rate** card with **Break-Even Detection**. Trades with PnL between `-$0.50` and `$0.50` are counted as Break-Even (e.g., `90% (9W/1L/2BE)`).
-    - Added **Profit Factor** card (Gross Profit / Gross Loss) to track risk efficiency.
-    - Updated Dashboard layout to a cleaner 3-row grid for stats.
-    - **Fixed Missing Stats Bug:** Solved an issue where Balance, Win Rate, and PnL were showing as 0 due to database schema limits.
-    - **Fixed Balance Calculation:** Now displaying **Wallet Balance** (Total Equity) instead of Available Balance (Free Margin), so it matches Binance UI exactly.
-    - Fixed TradingView symbol format to use `.P` suffix.
-    - Fixed TradingView symbol format to use `.P` suffix (e.g., `BTCUSDT.P`) ensuring Perpetual Futures data is displayed.
-    - Increased Chart container height to **500px** for better readability.
-- **Dashboard Steps Display:** Fixed "undefined" quantity error in the Steps History tab by correctly mapping `entry.quantity`.
-- **Authentication:** Fixed infinite 401 loop by adding aggressively auto-logout and Supabase key sanitization on connection errors.
-- **Version Tag:** Updated dashboard version display to `v1.6 (Detail+)`.
+## [v1.6] (Detail+) - 2025-12-15
+### Changes
+- **Detailed Stats:** Added Win Rate, Break-Even count, and Profit Factor cards.
+- **Fixed Stats Display:** Solved bug where stats were showing $0.00 due to database schema.
+- **Dashboard Refactor:** Improved grid layout for better readability.
 
-## [1.5.0] - Previous Release
+## [v1.5] (Charts Fixed) - 2025-12-15
+### Changes
+- Fixed TradingView Chart symbol format (added `.P` suffix for Perpetual Contracts).
+- Increased Chart container height to 500px.
 
-### Added
-- **Future Step Projections:** Dashboard now shows estimated prices and margins for future Martingale steps.
-- **Detailed Positions:** New tabbed modal (Overview, Chart, Steps) for active positions.
+## [v1.4] (Bugfix Update) - 2025-12-14
+### Changes
+- Fixed `get_position` crash when position was missing.
+- Added `get_usdt_balance` method to BinanceClient.
+- Improved logging for position scanning.
+
+## [v1.3] (Supabase Integration) - 2025-12-12
+### Changes
+- Added meaningful status messages for "Waiting..." state.
+- Integrated `supabase_client.py` for remote command handling (Start/Stop/Liquidate).
+- Added `sync_state` to push bot status to Supabase DB.
+
+## [v1.2] (Visual Orders) - 2025-12-10
+### Changes
+- Added visual orders on chart for TP/SL/Steps.
+- Added `place_visual_orders` logic.
+
+## [v1.1] (Initial Release) - 2025-12-01
+- Core Martingale Strategy.
+- Binance Futures API integration.

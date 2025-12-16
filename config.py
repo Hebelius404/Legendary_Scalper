@@ -191,6 +191,7 @@ MARTINGALE_HARD_STOP_USD = 250  # Emergency close at -$100 loss (dollar based)
 MARTINGALE_HALF_CLOSE_PERCENT = 2  # Close half when within 2% of average
 MARTINGALE_MIN_RSI = 70             # Only enter SHORT when RSI > 70 (overbought)
 MARTINGALE_TP_PERCENT = 1.5     # Take profit at 1.5% profit
+MARTINGALE_RSI_MAX_LIMIT = 90   # RSI Circuit Breaker: Do not add steps if RSI > 90
 
 # Martingale Steps: [margin per step in USDT] - 9 Steps (for $400 account)
 MARTINGALE_STEPS = [

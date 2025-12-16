@@ -487,7 +487,55 @@ class MartingaleManager:
         
         # For steps 5+: Use distance-based entry (original logic)
         distance_percent = ((current_price - position.average_entry) / position.average_entry) * 100
-        required_distance = self.STEP_DISTANCES[next_step - 1] if next_step <= len(self.STEP_DISTANCES) else 50
+        base_distance = self.STEP_DISTANCES[next_step - 1] if next_step <= len(self.STEP_DISTANCES) else 50
+        
+        # -----------------------------------------------------
+        # SAFETY V1.7: Dynamic Step Spacing & RSI Circuit Breaker
+        # -----------------------------------------------------
+        volatility_multiplier = 1.0
+        
+        # Only fetch rigorous data if we are close to the base distance to save API calls
+        # (e.g. if we are at 2% and need 3%, don't bother fetching RSI yet)
+        if distance_percent >= (base_distance * 0.8): 
+            try:
+                # 1. Dynamic Step Spacing (Volatility)
+                # Fetch recent klines to measure volatility
+                klines = self.client.get_klines(symbol=symbol, interval='1h', limit=20)
+                if klines:
+                    ranges = []
+                    for k in klines:
+                        # High - Low
+                        ranges.append(float(k[2]) - float(k[3]))
+                        
+                    avg_range = sum(ranges) / len(ranges)
+                    current_range = ranges[-1]
+                    
+                    if avg_range > 0:
+                        vol_ratio = current_range / avg_range
+                        # Clamp multiplier between 1.0 and 3.0
+                        volatility_multiplier = max(1.0, min(3.0, vol_ratio))
+                        
+                        if volatility_multiplier > 1.2:
+                             logger.info(f"🌊 PROT: {symbol} Volatility High ({volatility_multiplier:.1f}x) - Widening gap")
+
+                # 2. RSI Circuit Breaker
+                # Prevent adding margin if RSI is extremely high/low
+                rsi_val = self.client.get_rsi(symbol)
+                max_rsi = getattr(config, 'MARTINGALE_RSI_MAX_LIMIT', 90)
+                
+                # For SHORT positions: High RSI is bad
+                if rsi_val > max_rsi:
+                     return {
+                        'should_add': False,
+                        'reason': f'🚫 RSI Circuit Breaker: {rsi_val:.1f} > {max_rsi} (Too Hot)',
+                        'rsi': rsi_val
+                    }
+
+            except Exception as e:
+                logger.error(f"Safety check failed: {e}")
+        
+        # Apply Multiplier
+        required_distance = base_distance * volatility_multiplier
         
         # Time since last step
         time_since_last = (datetime.now() - position.last_step_time).total_seconds() / 60
@@ -497,7 +545,7 @@ class MartingaleManager:
         if distance_percent < required_distance:
             return {
                 'should_add': False,
-                'reason': f'Distance {distance_percent:.1f}% < {required_distance}% required',
+                'reason': f'Distance {distance_percent:.1f}% < {required_distance:.1f}% req (Mod: {volatility_multiplier:.1f}x)',
                 'distance': distance_percent,
                 'time_waiting': time_since_last
             }
