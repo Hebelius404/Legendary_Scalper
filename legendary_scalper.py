@@ -118,12 +118,7 @@ class LegendaryScalper:
             # Sync to ensure internal state matches Binance
             self.martingale.sync_positions()
             
-            # Global cleanup: remove ALL orphaned visual orders from closed positions
-            self.martingale.global_cleanup_visual_orders()
-            
-            # Recover visual orders for all active positions
-            for symbol in self.martingale.positions:
-                self.martingale.recover_visual_orders(symbol)
+
             
             # Initial pump scan
             logger.info("🔍 Scanning for pumped coins...")

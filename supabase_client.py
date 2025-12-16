@@ -79,13 +79,14 @@ class SupabaseManager:
         except BlockingIOError:
             pass # Ignore benign socket wait errors (WinError 10035)
         except Exception as e:
-            # Check for Windows socket error 10035 in traceback message if needed
-            if "10035" in str(e):
+            # Check for Windows socket error 10035 or connection reset
+            error_str = str(e)
+            if "10035" in error_str or "ConnectionTerminated" in error_str:
                 pass
             else:
-                logger.error(f"☁️ Sync failed: {e}")
-            self.connected = False  # Temporarily mark disconnected
-
+                logger.warning(f"☁️ Sync failed (retrying): {e}")
+            # self.connected = False  <-- DISABLED: Don't kill connection permantly on error
+            
     def poll_commands(self) -> List[Dict]:
         """
         Check 'commands' table for new PENDING commands
@@ -111,7 +112,12 @@ class SupabaseManager:
             return commands
             
         except Exception as e:
-            logger.error(f"☁️ Command poll failed: {e}")
+            # Suppress noisy connection errors
+            error_str = str(e)
+            if "ConnectionTerminated" in error_str:
+                logger.warning(f"☁️ Connection flake (retrying)...")
+            else:
+                logger.warning(f"☁️ Command poll failed: {e}")
             return []
 
     def log(self, level: str, message: str):

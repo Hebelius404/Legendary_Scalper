@@ -1046,7 +1046,15 @@ class MartingaleManager:
                 'average_entry': pos.average_entry,
                 'total_quantity': pos.total_quantity,
                 'unrealized_pnl': pnl,
-                'current_price': current_price
+                'current_price': current_price,
+                'entries': [
+                    {**e, 'time': e['time'].isoformat() if hasattr(e.get('time'), 'isoformat') else str(e.get('time'))}
+                    for e in pos.entries
+                ],
+                'liquidation_price': pos.average_entry * (1 + (1/getattr(config, 'LEVERAGE', 10))),
+                'break_even_price': pos.average_entry * (1 - 0.0004), # Rough estimate with fees
+                'trailing_tp_active': pos.trailing_tp_active,
+                'max_profit_usd': pos.max_profit_usd
             }
             total_margin += pos.total_margin
             total_unrealized_pnl += pnl
@@ -1055,7 +1063,14 @@ class MartingaleManager:
             'active_positions': active_positions,
             'total_margin': total_margin,
             'total_unrealized_pnl': total_unrealized_pnl,
-            'positions': positions_data
+            'positions': positions_data,
+            'config': {
+                'steps': self.STEPS,
+                'step_distances': self.STEP_DISTANCES,
+                'max_positions': getattr(config, 'MAX_POSITIONS', 3),
+                'min_pump': getattr(config, 'MIN_PUMP_RETREAT_PERCENT', 30),
+                'max_margin': sum(self.STEPS)
+            }
         }
 
 

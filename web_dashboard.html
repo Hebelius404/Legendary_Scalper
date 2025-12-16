@@ -110,7 +110,8 @@
             <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-yellow-600">
                 LEGENDARY</h1>
             <p class="text-xs text-gray-500">Remote Control • Live <span
-                    class="text-[0.6rem] text-green-600 border border-green-900 rounded px-1 ml-2">v1.1 (Secure)</span>
+                    class="text-[0.6rem] text-green-600 border border-green-900 rounded px-1 ml-2">v1.5 (Charts
+                    Fixed)</span>
             </p>
         </div>
         <div id="connectionStatus" class="h-3 w-3 rounded-full bg-red-500 shadow-[0_0_10px_red]"></div>
@@ -192,6 +193,132 @@
             class="hidden mt-2 p-2 bg-black text-[0.6rem] text-green-500 overflow-x-auto text-left rounded border border-gray-800 h-32"></pre>
     </div>
 
+
+    <!-- Position Details Modal -->
+    <div id="posModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden"
+        onclick="closeModal(event)">
+        <div class="card w-full max-w-sm p-0 overflow-hidden relative" onclick="event.stopPropagation()">
+            <!-- Header -->
+            <div class="p-4 border-b border-gray-800 bg-[#252525] flex justify-between items-center shrink-0">
+                <div>
+                    <h3 id="modalSym" class="text-xl font-bold text-white leading-none">BTCUSDT</h3>
+                    <div id="modalPnl" class="text-lg font-bold mt-1 text-green-400 leading-none">+$0.00</div>
+                </div>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white p-2 text-xl">✕</button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-800 bg-[#1a1a1a] text-sm shrink-0">
+                <button onclick="switchTab('overview')" id="btnTabOverview"
+                    class="flex-1 p-3 text-white border-b-2 border-blue-500 font-medium">Overview</button>
+                <button onclick="switchTab('chart')" id="btnTabChart"
+                    class="flex-1 p-3 text-gray-500 hover:text-gray-300">Chart</button>
+                <button onclick="switchTab('history')" id="btnTabHistory"
+                    class="flex-1 p-3 text-gray-500 hover:text-gray-300">Steps</button>
+            </div>
+
+            <!-- Content Area -->
+            <div class="p-4 overflow-y-auto grow">
+
+                <!-- TAB: OVERVIEW -->
+                <div id="tabOverview" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <!-- Left Column -->
+                        <div class="space-y-3">
+                            <div>
+                                <div class="text-[0.65rem] text-gray-500 uppercase">Avg Entry</div>
+                                <div id="modalEntry" class="font-mono text-white text-lg">0.0000</div>
+                            </div>
+                            <div>
+                                <div class="text-[0.65rem] text-gray-500 uppercase">Current Price</div>
+                                <div id="modalPrice" class="font-mono text-white text-lg">0.0000</div>
+                            </div>
+                            <div>
+                                <div class="text-[0.65rem] text-gray-500 uppercase">Liquidation (Est)</div>
+                                <div id="modalLiq" class="font-mono text-yellow-500">0.0000</div>
+                            </div>
+                        </div>
+                        <!-- Right Column -->
+                        <div class="space-y-3">
+                            <div>
+                                <div class="text-[0.65rem] text-gray-500 uppercase">Margin Used</div>
+                                <div id="modalMargin" class="font-mono text-blue-400 text-lg">$0.00</div>
+                            </div>
+                            <div>
+                                <div class="text-[0.65rem] text-gray-500 uppercase">Size (Qty)</div>
+                                <div id="modalQty" class="font-mono text-gray-300">0.0000</div>
+                            </div>
+                            <div>
+                                <div class="text-[0.65rem] text-gray-500 uppercase">Break-Even</div>
+                                <div id="modalBE" class="font-mono text-green-400">0.0000</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Section -->
+                    <div class="p-3 bg-black/40 rounded border border-gray-800">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-gray-500">Martingale Progress</span>
+                            <span id="modalStep" class="text-white font-bold">Step 1 / 9</span>
+                        </div>
+                        <div class="w-full bg-gray-700 h-2 rounded-full overflow-hidden mb-2">
+                            <div id="modalStepBar" class="bg-blue-600 h-full transition-all duration-500"
+                                style="width: 10%"></div>
+                        </div>
+                        <div class="flex justify-between text-[0.6rem] text-gray-500">
+                            <span>Safe</span>
+                            <span>Aggressive</span>
+                            <span>Danger</span>
+                        </div>
+                    </div>
+
+                    <!-- Trailing Status -->
+                    <div class="p-3 bg-black/40 rounded border border-gray-800 flex justify-between items-center">
+                        <div>
+                            <div class="text-[0.65rem] text-gray-500 uppercase">Trailing Take Profit</div>
+                            <div id="modalTrailingStatus" class="text-sm font-bold text-gray-400">Inactive</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[0.65rem] text-gray-500 uppercase">Max Profit Hit</div>
+                            <div id="modalMaxProfit" class="text-sm font-mono text-gray-300">$0.00</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: CHART -->
+                <div id="tabChart"
+                    class="hidden h-[500px] bg-gray-900 rounded overflow-hidden relative border border-gray-800">
+                    <div id="chartContainer"
+                        class="w-full h-full flex items-center justify-center text-gray-600 text-xs">
+                        Loading Chart...
+                    </div>
+                </div>
+
+                <!-- TAB: HISTORY -->
+                <div id="tabHistory" class="hidden">
+                    <table class="w-full text-xs text-left">
+                        <thead class="text-gray-500 bg-[#252525] sticky top-0 uppercase text-[0.6rem]">
+                            <tr>
+                                <th class="p-3">#</th>
+                                <th class="p-3">Price</th>
+                                <th class="p-3">Size</th>
+                                <th class="p-3 text-right">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody" class="divide-y divide-gray-800 text-gray-300 font-mono">
+                            <!-- Rows injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+
+    </div>
+    </div>
+
     <!-- Login Overlay -->
     <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex flex-col items-center justify-center p-6 hidden">
         <div class="card w-full max-w-sm p-6 text-center">
@@ -229,9 +356,24 @@
         const elInpUrl = document.getElementById('inpUrl');
         const elInpKey = document.getElementById('inpKey');
 
+        // Modal Elements
+        const elModal = document.getElementById('posModal');
+        const elModalSym = document.getElementById('modalSym');
+        const elModalPnl = document.getElementById('modalPnl');
+        const elModalEntry = document.getElementById('modalEntry');
+        const elModalPrice = document.getElementById('modalPrice');
+        const elModalQty = document.getElementById('modalQty');
+        const elModalMargin = document.getElementById('modalMargin');
+        const elModalStep = document.getElementById('modalStep');
+        const elModalStepBar = document.getElementById('modalStepBar');
+        const elModalTrailing = document.getElementById('modalTrailing');
+
         // GLOBAL STATE
         let supabase = null;
         let botId = 1;
+
+        // Cache for click handlers
+        let currentPositionsData = {}; // Store raw position data
 
         // Elements (Logic)
         const elBalance = document.getElementById('balance');
@@ -249,12 +391,73 @@
         // State
         let isRunning = false;
 
+        // Modal Logic
+        function showPositionDetails(symbol) {
+            const pos = currentPositionsData[symbol];
+            if (!pos) return;
+
+            // Populate
+            elModalSym.textContent = symbol;
+
+            // PnL
+            const pnl = pos.unrealized_pnl || 0;
+            elModalPnl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+            elModalPnl.className = `text-3xl font-bold mt-1 ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`;
+
+            // Grid
+            elModalEntry.textContent = pos.average_entry.toFixed(4);
+            elModalPrice.textContent = (pos.current_price || 0).toFixed(4);
+            elModalQty.textContent = pos.total_quantity;
+            elModalMargin.textContent = `$${pos.total_margin.toFixed(2)}`;
+
+            // Steps
+            // We need to guess max steps or get from config if available globally. Fallback to 9
+            const maxSteps = window.lastConfig?.steps?.length || 9;
+            elModalStep.textContent = `${pos.step} / ${maxSteps}`;
+            elModalStepBar.style.width = `${(pos.step / maxSteps) * 100}%`;
+
+            // Trailing
+            if (pos.trailing_tp_active) {
+                elModalTrailing.innerHTML = `<span class="text-green-400">🟢 Active</span> (Max: $${pos.max_profit_usd.toFixed(2)})`;
+            } else {
+                elModalTrailing.textContent = 'Inactive';
+            }
+
+            // Show
+            elModal.classList.remove('hidden');
+        }
+
+        function closeModal(e) {
+            if (e && e.target !== elModal && !e.target.innerText.includes('✕') && !e.target.innerText.includes('Close')) return;
+            elModal.classList.add('hidden');
+        }
+
         async function init() {
+
             // Check LocalStorage
             const savedUrl = localStorage.getItem('ls_supa_url');
-            const savedKey = localStorage.getItem('ls_supa_key');
+            let savedKey = localStorage.getItem('ls_supa_key');
 
             if (savedUrl && savedKey) {
+                // Aggressive Self-Healing for Bad Keys
+                let dirty = false;
+                if (savedKey.includes('SUPABASE_KEY=')) {
+                    savedKey = savedKey.split('SUPABASE_KEY=')[1].trim();
+                    dirty = true;
+                }
+                if (savedKey.startsWith('"') || savedKey.startsWith("'")) {
+                    savedKey = savedKey.slice(1, -1);
+                    dirty = true;
+                }
+
+                if (dirty) {
+                    // Update and reload to be clean
+                    localStorage.setItem('ls_supa_key', savedKey);
+                    console.log("🧹 Auto-cleaned API Key logic triggered");
+                    location.reload();
+                    return;
+                }
+
                 connect(savedUrl, savedKey);
             } else {
                 showLogin();
@@ -267,11 +470,17 @@
 
         function saveAndConnect() {
             const url = elInpUrl.value.trim();
-            const key = elInpKey.value.trim();
+            let key = elInpKey.value.trim();
 
             if (!url || !key) {
                 alert("Please enter both URL and Key");
                 return;
+            }
+
+            // Common user error: pasting full env string "SUPABASE_KEY=ey..."
+            if (key.includes('SUPABASE_KEY=')) {
+                key = key.split('SUPABASE_KEY=')[1].trim();
+                if (key.startsWith('"') || key.startsWith("'")) key = key.slice(1, -1);
             }
 
             localStorage.setItem('ls_supa_url', url);
@@ -306,8 +515,18 @@
 
             // 1. Initial State Fetch
             const { data, error } = await supabase.from('bot_state').select('*').eq('id', botId).single();
+
+            if (error) {
+                console.error("Fetch error:", error);
+                // Auto-logout on Auth error (PGRST301 is Postgres auth error, or standard 401/403)
+                if (error.code === '401' || error.code === 'PGRST301' || error.message.includes('JWT')) {
+                    console.warn("Auth token invalid - forcing logout");
+                    localStorage.removeItem('ls_supa_key');
+                    location.reload();
+                    return;
+                }
+            }
             if (data) updateUI(data);
-            if (error) console.error("Fetch error:", error);
 
             // 2. Initial Logs Fetch (Last 50)
             fetchLogs();
@@ -329,16 +548,26 @@
         }
 
         async function fetchLogs() {
-            const { data } = await supabase.from('logs')
+            const { data, error } = await supabase.from('logs')
                 .select('*')
                 .order('timestamp', { ascending: false })
                 .limit(50);
 
+            if (error) {
+                console.error("Log fetch error:", error);
+                // Auto-logout on Auth error
+                if (error.code === '401' || error.message?.includes('JWT') || error.message?.includes('API key')) {
+                    console.warn("Auth token invalid - forcing logout");
+                    localStorage.removeItem('ls_supa_key');
+                    localStorage.removeItem('ls_supa_url'); // Clear both to be safe
+                    location.reload();
+                    return;
+                }
+            }
+
             if (data) {
-                // Reverse to show oldest first in the list (since we append)
-                // actually better to prepend? Standard terminal flows down.
-                // So clear and add in chronological order.
                 elLogs.innerHTML = '';
+                // Reverse to show oldest first in the list (since we append)
                 data.reverse().forEach(log => addLog(log));
             }
         }
@@ -401,6 +630,10 @@
                 }
             } catch (e) { console.error("JSON Parse error", e); }
 
+            // Store globally for modal access
+            currentPositionsData = positions;
+            window.lastConfig = config;
+
             renderPositions(positions, config);
             renderConfig(config);
         }
@@ -430,7 +663,8 @@
                 const stepPct = (pos.step / (config.steps ? config.steps.length : 10)) * 100;
 
                 const card = document.createElement('div');
-                card.className = 'bg-[#1e1e1e] border border-gray-800 rounded-lg p-3';
+                card.onclick = () => showPositionDetails(sym);  // Add Click Handler
+                card.className = 'bg-[#1e1e1e] border border-gray-800 rounded-lg p-3 cursor-pointer hover:bg-[#252525] transition-colors'; // Add cursor and hover
                 card.innerHTML = `
                     <div class="flex justify-between items-start mb-2">
                         <div>
@@ -471,6 +705,152 @@
             setTimeout(() => {
                 elConn.classList.remove('animate-pulse');
             }, 500);
+        }
+
+
+        // --- MODAL LOGIC ---
+        function switchTab(tab) {
+            // Update Buttons
+            ['overview', 'chart', 'history'].forEach(t => {
+                const btn = document.getElementById(`btnTab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                const div = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+
+                if (t === tab) {
+                    btn.classList.remove('text-gray-500', 'hover:text-gray-300');
+                    btn.classList.add('text-white', 'border-b-2', 'border-blue-500', 'font-medium');
+                    div.classList.remove('hidden');
+                } else {
+                    btn.classList.add('text-gray-500', 'hover:text-gray-300');
+                    btn.classList.remove('text-white', 'border-b-2', 'border-blue-500', 'font-medium');
+                    div.classList.add('hidden');
+                }
+            });
+        }
+
+        function showPositionDetails(symbol) {
+            const pos = currentPositionsData[symbol];
+            if (!pos) return;
+
+            // 1. Populate Header
+            elModalSym.textContent = symbol;
+            const pnl = pos.unrealized_pnl || 0;
+            elModalPnl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+            elModalPnl.className = `text-lg font-bold mt-1 leading-none ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`;
+
+            // 2. Populate Overview Tab
+            document.getElementById('modalEntry').textContent = pos.average_entry.toFixed(4);
+            document.getElementById('modalPrice').textContent = (pos.current_price || 0).toFixed(4);
+            document.getElementById('modalQty').textContent = pos.total_quantity;
+            document.getElementById('modalMargin').textContent = `$${pos.total_margin.toFixed(2)}`;
+
+            // New Fields (if available from backend)
+            const liq = pos.liquidation_price || (pos.average_entry * (1 + (1 / 10))); // Fallback est
+            document.getElementById('modalLiq').textContent = liq.toFixed(4);
+
+            const be = pos.break_even_price || pos.average_entry;
+            document.getElementById('modalBE').textContent = be.toFixed(4);
+
+            // Steps
+            const maxSteps = window.lastConfig?.steps?.length || 9;
+            document.getElementById('modalStep').textContent = `Step ${pos.step} / ${maxSteps}`;
+            document.getElementById('modalStepBar').style.width = `${(pos.step / maxSteps) * 100}%`;
+
+            // Trailing
+            const elTrail = document.getElementById('modalTrailingStatus');
+            const elMaxP = document.getElementById('modalMaxProfit');
+
+            if (pos.trailing_tp_active) {
+                elTrail.innerHTML = '<span class="text-green-400">🟢 Active</span>';
+                elMaxP.textContent = `$${(pos.max_profit_usd || 0).toFixed(2)}`;
+            } else {
+                elTrail.textContent = 'Inactive';
+                elMaxP.textContent = '-';
+            }
+
+            // 3. Populate Chart Tab
+            // User requested Perpetual Futures format (e.g. SYMBOL.P)
+            const chartSym = symbol.toUpperCase() + '.P';
+            const chartHtml = `<iframe src="https://s.tradingview.com/widgetembed/?symbol=BINANCE:${chartSym}&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=1&hide_side_toolbar=1&allow_symbol_change=0&save_image=0&details=0" style="width: 100%; height: 100%; border: 0;"></iframe>`;
+            // Only update if different to avoid reload
+            const chartContainer = document.getElementById('chartContainer');
+            if (!chartContainer.innerHTML.includes(chartSym)) {
+                chartContainer.innerHTML = chartHtml;
+            }
+
+            // 4. Populate History Tab (Steps)
+            const tbody = document.getElementById('historyBody');
+            tbody.innerHTML = '';
+
+            // A. Past Steps
+            if (pos.entries && pos.entries.length > 0) {
+                pos.entries.forEach((entry, idx) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="p-3 text-gray-500">${idx + 1}</td>
+                        <td class="p-3 text-white">${entry.price.toFixed(4)}</td>
+                        <td class="p-3 text-gray-400">${entry.quantity || entry.qty || '-'}</td>
+                        <td class="p-3 text-right text-gray-600 text-[0.65rem]">${new Date(entry.time || Date.now()).toLocaleTimeString()}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-600 italic">No history data available (Restart Bot)</td></tr>';
+            }
+
+            // B. Future Steps (Projections)
+            const steps = window.lastConfig?.steps || [];
+            const stepDistances = window.lastConfig?.step_distances || [];
+            const currentStep = pos.step;
+
+            if (steps.length > currentStep) {
+                // Separator
+                const sep = document.createElement('tr');
+                sep.innerHTML = '<td colspan="4" class="bg-gray-800 p-1 text-[0.6rem] text-center text-gray-400 font-bold uppercase tracking-wider">Future Projections</td>';
+                tbody.appendChild(sep);
+
+                for (let i = currentStep; i < steps.length; i++) {
+                    const nextStepNum = i + 1;
+                    const margin = steps[i];
+
+                    let estimatedPrice = 0;
+
+                    if (nextStepNum <= 3) {
+                        // Loss Logic
+                        // Target Loss %: Step 1->70, 2->80, 3->90
+                        let reqLossPct = 70;
+                        if (nextStepNum === 2) reqLossPct = 80;
+                        if (nextStepNum === 3) reqLossPct = 90;
+
+                        // Price = Entry + (RequiredLossUSD / TotalQty)
+                        // LossUSD = (ReqPct/100) * TotalMargin
+                        const reqLossUSD = (reqLossPct / 100) * pos.total_margin;
+                        estimatedPrice = pos.average_entry + (reqLossUSD / pos.total_quantity);
+
+                    } else {
+                        // Distance Logic
+                        // Price = Entry * (1 + Distance/100)
+                        const dist = stepDistances[i] || 50; // default to 50 if missing
+                        estimatedPrice = pos.average_entry * (1 + (dist / 100));
+                    }
+
+                    const row = document.createElement('tr');
+                    row.className = "opacity-50 hover:opacity-100 transition-opacity";
+
+                    row.innerHTML = `
+                        <td class="p-3 text-blue-500 italic">${nextStepNum}</td>
+                        <td class="p-3 text-blue-300 italic">~${estimatedPrice.toFixed(4)}</td>
+                        <td class="p-3 text-gray-500 italic">$${margin}</td>
+                        <td class="p-3 text-right text-gray-600 text-[0.65rem] italic">Estimated</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+            }
+
+            // Reset to Overview
+            switchTab('overview');
+
+            // Show
+            elModal.classList.remove('hidden');
         }
 
         init();
