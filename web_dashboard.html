@@ -118,18 +118,35 @@
     </div>
 
     <!-- Main Stats -->
-    <div class="grid grid-cols-2 gap-3 mb-4">
-        <div class="card p-4">
+    <!-- Main Stats -->
+    <div class="grid grid-cols-2 gap-2 mb-2">
+        <div class="card p-3">
             <div class="stat-label">Balance</div>
-            <div class="stat-value" id="balance">$0.00</div>
+            <div class="stat-value text-green-400 text-sm" id="balance">$0.00</div>
         </div>
-        <div class="card p-4">
+        <div class="card p-3">
+            <div class="stat-label">Total P&L</div>
+            <div class="stat-value text-sm" id="totalPnl">$0.00</div>
+        </div>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mb-2">
+        <div class="card p-3">
+            <div class="stat-label">Win Rate</div>
+            <div class="stat-value text-yellow-400 text-sm" id="winRate">0%</div>
+        </div>
+        <div class="card p-3">
+            <div class="stat-label">Profit Factor</div>
+            <div class="stat-value text-blue-400 text-sm" id="profitFactor">0.00</div>
+        </div>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mb-6">
+        <div class="card p-3">
             <div class="stat-label">Active Pos</div>
             <div class="stat-value" id="activePos">0</div>
         </div>
-        <div class="card col-span-2 p-4">
+        <div class="card p-3">
             <div class="stat-label">Unrealized PnL</div>
-            <div class="stat-value text-2xl" id="pnl">$0.00</div>
+            <div class="stat-value text-xl" id="pnl">$0.00</div>
         </div>
     </div>
 
@@ -377,6 +394,9 @@
 
         // Elements (Logic)
         const elBalance = document.getElementById('balance');
+        const elTotalPnl = document.getElementById('totalPnl');
+        const elWinRate = document.getElementById('winRate');
+        const elProfitFactor = document.getElementById('profitFactor');
         const elActivePos = document.getElementById('activePos');
         const elPnl = document.getElementById('pnl');
         const elPositions = document.getElementById('positionsList');
@@ -586,31 +606,10 @@
         function updateUI(state) {
             if (!state) return;
 
-            // Stats
-            elBalance.textContent = `$${state.balance.toFixed(2)}`;
-            elActivePos.textContent = state.active_positions_count;
-
-            const pnl = state.total_pnl;
-            elPnl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
-            elPnl.className = `stat-value text-2xl ${pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
-
-            // DEBUG
-            document.getElementById('debugData').textContent = JSON.stringify(state, null, 2);
-
-            // Running State
-            isRunning = state.is_running;
-            if (isRunning) {
-                document.getElementById('controlsRunning').classList.remove('hidden');
-                document.getElementById('controlsStopped').classList.add('hidden');
-            } else {
-                document.getElementById('controlsRunning').classList.add('hidden');
-                document.getElementById('controlsStopped').classList.remove('hidden');
-            }
-
-            // Positions & Config
-            // Handle both old format (direct dict) and new format (wrapper)
+            // 1. Parse JSON Blob & Extract Stats
             let positions = {};
             let config = {};
+            let extraStats = {};
 
             try {
                 let json = {};
@@ -624,11 +623,63 @@
                     // New Format
                     positions = json.positions;
                     config = json.config || {};
+                    // Extract Stats packed in wrapper
+                    extraStats = json;
                 } else {
                     // Old Format (just positions)
                     positions = json;
                 }
             } catch (e) { console.error("JSON Parse error", e); }
+
+            // 2. Update Stats (Priority: JSON > State Column)
+
+            // Balance
+            const balanceVal = extraStats.balance !== undefined ? extraStats.balance : (state.balance || 0);
+            elBalance.textContent = `$${balanceVal.toFixed(2)}`;
+
+            // Total PnL (Realized)
+            const sessPnl = extraStats.total_realized_pnl !== undefined ? extraStats.total_realized_pnl : (state.total_realized_pnl || 0);
+            elTotalPnl.textContent = `${sessPnl >= 0 ? '+' : ''}$${sessPnl.toFixed(2)}`;
+            elTotalPnl.className = `stat-value text-sm ${sessPnl >= 0 ? 'text-green-400' : 'text-red-400'}`;
+
+            // Win Rate Stats
+            const wins = extraStats.wins !== undefined ? extraStats.wins : (state.wins || 0);
+            const losses = extraStats.losses !== undefined ? extraStats.losses : (state.losses || 0);
+            const be = extraStats.break_evens !== undefined ? extraStats.break_evens : (state.break_evens || 0);
+
+            const denom = wins + losses;
+            const winRate = denom > 0 ? ((wins / denom) * 100).toFixed(1) : 0;
+            elWinRate.textContent = `${winRate}% (${wins}W/${losses}L/${be}BE)`;
+
+            // Profit Factor
+            const gProfit = extraStats.gross_profit !== undefined ? extraStats.gross_profit : (state.gross_profit || 0);
+            const gLoss = extraStats.gross_loss !== undefined ? extraStats.gross_loss : (state.gross_loss || 0);
+            const pf = gLoss > 0 ? (gProfit / gLoss).toFixed(2) : (gProfit > 0 ? '∞' : '0.00');
+            elProfitFactor.textContent = pf;
+
+            // Active Pos
+            const activeCount = Object.keys(positions).length;
+            elActivePos.textContent = activeCount;
+
+            // Unrealized PnL
+            // Try to sum from positions if state is stale? No, rely on state for now, or sum it.
+            // Let's rely on state since backend calcs it.
+            const pnl = state.total_unrealized_pnl || state.total_pnl || 0;
+            elPnl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+            elPnl.className = `stat-value text-xl ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`;
+
+            // DEBUG
+            document.getElementById('debugData').textContent = JSON.stringify(state, null, 2);
+
+            // Running State
+            isRunning = state.is_running;
+            if (isRunning) {
+                document.getElementById('controlsRunning').classList.remove('hidden');
+                document.getElementById('controlsStopped').classList.add('hidden');
+            } else {
+                document.getElementById('controlsRunning').classList.add('hidden');
+                document.getElementById('controlsStopped').classList.remove('hidden');
+            }
 
             // Store globally for modal access
             currentPositionsData = positions;

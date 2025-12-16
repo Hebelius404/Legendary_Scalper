@@ -271,7 +271,8 @@ class BinanceClient:
         balances = self.get_balance()
         for balance in balances:
             if balance['asset'] == 'USDT':
-                return float(balance['availableBalance'])
+                # Use 'balance' (Wallet Balance) not 'availableBalance' (Margin Free)
+                return float(balance['balance'])
         return 0.0
     
     def get_positions(self) -> List[Dict]:

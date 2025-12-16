@@ -58,7 +58,15 @@ class SupabaseManager:
             # { "positions": {...}, "config": {...} }
             positions_wrapper = {
                 "positions": bot_status.get("positions", {}),
-                "config": bot_status.get("config", {})
+                "config": bot_status.get("config", {}),
+                # Pack stats here to avoid schema migration
+                "balance": bot_status.get("balance", 0),
+                "total_realized_pnl": bot_status.get("total_realized_pnl", 0),
+                "wins": bot_status.get("wins", 0),
+                "losses": bot_status.get("losses", 0),
+                "break_evens": bot_status.get("break_evens", 0),
+                "gross_profit": bot_status.get("gross_profit", 0),
+                "gross_loss": bot_status.get("gross_loss", 0)
             }
 
             data = {

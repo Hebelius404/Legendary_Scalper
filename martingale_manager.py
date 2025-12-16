@@ -184,6 +184,20 @@ class MartingaleManager:
         self.emergency_stop_percent = getattr(config, 'MARTINGALE_EMERGENCY_STOP', 20)
         self.half_close_threshold = getattr(config, 'MARTINGALE_HALF_CLOSE_PERCENT', 2)
         
+        # PnL & Win Rate Tracking (All Time)
+        self.pnl_file = "total_pnl.json"
+        
+        # Init stats
+        self.wins = 0
+        self.losses = 0
+        self.break_evens = 0
+        self.total_pnl = 0.0
+        self.gross_profit = 0.0
+        self.gross_loss = 0.0
+        
+        # Load from file
+        self.load_total_pnl()
+        
         logger.info("🎰 Martingale Manager initialized")
         logger.info(f"   Steps: {self.STEPS}")
         logger.info(f"   Dynamic limits: {self.MAX_POSITIONS_BELOW_THRESHOLD} pos < ${self.MARGIN_THRESHOLD}, {self.MAX_POSITIONS_ABOVE_THRESHOLD} pos >= ${self.MARGIN_THRESHOLD}")
@@ -280,6 +294,51 @@ class MartingaleManager:
         if total_margin >= self.MARGIN_THRESHOLD:
             return self.MAX_POSITIONS_ABOVE_THRESHOLD
         return self.MAX_POSITIONS_BELOW_THRESHOLD
+    
+    def get_balance(self) -> float:
+        """Get current USDT balance"""
+        return self.client.get_usdt_balance()
+
+    def load_total_pnl(self):
+        """Load persistent total P&L and stats from file"""
+        try:
+            if os.path.exists(self.pnl_file):
+                with open(self.pnl_file, 'r') as f:
+                    data = json.load(f)
+                    self.total_pnl = float(data.get('total_pnl', 0.0))
+                    self.wins = int(data.get('wins', 0))
+                    self.losses = int(data.get('losses', 0))
+                    self.break_evens = int(data.get('break_evens', 0))
+                    self.gross_profit = float(data.get('gross_profit', 0.0))
+                    self.gross_loss = float(data.get('gross_loss', 0.0))
+                    
+                    logger.info(f"💰 Loaded Stats: P&L ${self.total_pnl:.2f}, {self.wins}W-{self.losses}L-{self.break_evens}BE")
+                    return
+        except Exception as e:
+            logger.error(f"Failed to load P&L: {e}")
+        
+        self.total_pnl = 0.0
+        self.wins = 0
+        self.losses = 0
+        self.break_evens = 0
+        self.gross_profit = 0.0
+        self.gross_loss = 0.0
+
+    def save_total_pnl(self):
+        """Save total P&L and stats to file"""
+        try:
+            with open(self.pnl_file, 'w') as f:
+                json.dump({
+                    'total_pnl': self.total_pnl,
+                    'wins': self.wins,
+                    'losses': self.losses,
+                    'break_evens': self.break_evens,
+                    'gross_profit': self.gross_profit,
+                    'gross_loss': self.gross_loss,
+                    'updated_at': str(datetime.now())
+                }, f)
+        except Exception as e:
+            logger.error(f"Failed to save P&L: {e}")
     
     def can_open_new_position(self) -> bool:
         """Check if we can open a new Martingale position"""
@@ -600,6 +659,20 @@ class MartingaleManager:
                 logger.info(f"   Closed: {half_quantity:.4f} @ {current_price:.6f}")
                 logger.info(f"   P&L: ${pnl:.2f}")
                 
+                # Update Total PnL
+                self.total_pnl += pnl
+                
+                if abs(pnl) < 0.50:
+                    self.break_evens += 1
+                elif pnl > 0:
+                    self.wins += 1
+                    self.gross_profit += pnl
+                else: 
+                    self.losses += 1
+                    self.gross_loss += abs(pnl)
+                    
+                self.save_total_pnl()
+                
                 # Save persistence
                 self.save_positions_state()
                 
@@ -807,6 +880,20 @@ class MartingaleManager:
                 logger.info(f"   Reason: {reason}")
                 logger.info(f"   Steps: {position.step} | Margin: ${position.total_margin}")
                 logger.info(f"   P&L: ${pnl:.2f} ({pnl_percent:.2f}%)")
+                
+                # Update Total PnL
+                self.total_pnl += pnl
+                
+                if abs(pnl) < 0.50:
+                    self.break_evens += 1
+                elif pnl > 0:
+                    self.wins += 1
+                    self.gross_profit += pnl
+                else: 
+                    self.losses += 1
+                    self.gross_loss += abs(pnl)
+                    
+                self.save_total_pnl()
                 
                 # Record stop loss if it was a loss closure
                 if pnl < 0 and ("stop" in reason.lower() or "emergency" in reason.lower() or "hard" in reason.lower()):
@@ -1023,6 +1110,10 @@ class MartingaleManager:
         except Exception as e:
             logger.error(f"Failed to load positions state: {e}")
 
+    def get_balance(self) -> float:
+        """Get current USDT balance"""
+        return self.client.get_usdt_balance()
+
     def get_status(self) -> Dict:
         """
         Get current martingale status for UI/Logging
@@ -1063,6 +1154,12 @@ class MartingaleManager:
             'active_positions': active_positions,
             'total_margin': total_margin,
             'total_unrealized_pnl': total_unrealized_pnl,
+            'total_realized_pnl': self.total_pnl,
+            'wins': self.wins,
+            'losses': self.losses,
+            'break_evens': self.break_evens,
+            'gross_profit': self.gross_profit,
+            'gross_loss': self.gross_loss,
             'positions': positions_data,
             'config': {
                 'steps': self.STEPS,

@@ -160,6 +160,7 @@ class LegendaryScalper:
         if current_time - self.last_pump_scan >= self.pump_scan_interval:
             self.last_pump_scan = current_time
             
+            logger.info("🔍 Scanning for pumped coins...")
             opportunities = self.watcher.scan_for_new_entries()
             
             for opp in opportunities[:5]:  # Open up to 5 positions per scan

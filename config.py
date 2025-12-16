@@ -104,7 +104,7 @@ ADX_MIN_THRESHOLD = 25            # Minimum ADX for strong trend
 # =============================================================================
 # DAILY LOSS LIMIT
 # =============================================================================
-DAILY_LOSS_LIMIT_ENABLED = True   # Enable daily loss limit
+DAILY_LOSS_LIMIT_ENABLED = False   # Enable daily loss limit
 MAX_DAILY_LOSS_PERCENT = 5.0      # Stop trading after 5% daily loss
 DAILY_RESET_HOUR = 0              # Reset at midnight UTC
 
@@ -186,8 +186,8 @@ VISION_MIN_CONFIDENCE = 65      # Minimum Vision confidence % (0-100)
 MARTINGALE_ENABLED = True       # Enable Martingale mode
 MARTINGALE_MIN_PUMP = 30        # Minimum pump % to consider coin (30%+)
 MARTINGALE_MAX_POSITIONS = 5    # Max concurrent Martingale positions
-MARTINGALE_EMERGENCY_STOP = 35  # Emergency close at -35% drawdown (allows all 9 steps)
-MARTINGALE_HARD_STOP_USD = 100  # Emergency close at -$100 loss (dollar based)
+MARTINGALE_EMERGENCY_STOP = 40  # Emergency close at -40% drawdown (allows all 9 steps)
+MARTINGALE_HARD_STOP_USD = 250  # Emergency close at -$100 loss (dollar based)
 MARTINGALE_HALF_CLOSE_PERCENT = 2  # Close half when within 2% of average
 MARTINGALE_MIN_RSI = 70             # Only enter SHORT when RSI > 70 (overbought)
 MARTINGALE_TP_PERCENT = 1.5     # Take profit at 1.5% profit

@@ -62,11 +62,13 @@ class PositionWatcher:
                 if current_price <= 0:
                     continue
                 
-                # 1. Check emergency stop - WARNING ONLY, no auto close
+                # 1. Check emergency stop
                 emergency = self.martingale.should_emergency_close(symbol, current_price)
                 if emergency.get('should_close'):
-                    logger.warning(f"⚠️ HIGH DRAWDOWN WARNING: {symbol} - {emergency['reason']}")
-                    # NO AUTO CLOSE - just warning, user will decide
+                    logger.warning(f"🚨 EMERGENCY CLOSE TRIGGERED: {symbol} - {emergency['reason']}")
+                    if self.martingale.close_position(symbol, current_price, emergency['reason']):
+                        actions['emergency_closed'].append(symbol)
+                    continue
                 
                 # 2. Check take profit
                 tp_check = self._check_take_profit(position, current_price)
@@ -321,6 +323,7 @@ class PositionWatcher:
             List of symbols to enter
         """
         if not self.martingale.can_open_new_position():
+            logger.info(f"⏸️ Scan skipped: Max positions reached ({len(self.martingale.positions)})")
             return []
         
         opportunities = []
