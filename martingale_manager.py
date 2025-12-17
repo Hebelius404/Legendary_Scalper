@@ -173,6 +173,19 @@ class MartingaleManager:
     MAX_POSITIONS_BELOW_THRESHOLD = 8  # Max positions when margin < $200
     MAX_POSITIONS_ABOVE_THRESHOLD = 4  # Max positions when margin >= $200
     
+    def _get_rsi(self, symbol: str) -> float:
+        """
+        Get RSI for a symbol using BinanceClient's calculate_rsi method.
+        Returns 50 (neutral) on any error.
+        """
+        try:
+            rsi_period = getattr(config, 'RSI_PERIOD', 14)
+            rsi = self.client.calculate_rsi(symbol, period=rsi_period, interval='1m')
+            return rsi if rsi >= 0 else 50.0
+        except Exception as e:
+            logger.warning(f"RSI calculation failed for {symbol}: {e}")
+            return 50.0  # Neutral on error
+    
     def __init__(self, client, executor):
         self.client = client
         self.executor = executor
@@ -520,7 +533,7 @@ class MartingaleManager:
 
                 # 2. RSI Circuit Breaker
                 # Prevent adding margin if RSI is extremely high/low
-                rsi_val = self.client.get_rsi(symbol)
+                rsi_val = self._get_rsi(symbol)
                 max_rsi = getattr(config, 'MARTINGALE_RSI_MAX_LIMIT', 90)
                 
                 # For SHORT positions: High RSI is bad

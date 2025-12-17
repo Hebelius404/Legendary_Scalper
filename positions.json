@@ -1,51 +1,85 @@
 {
-    "PIPPINUSDT": {
+    "PTBUSDT": {
         "step": 1,
-        "max_profit_usd": 0,
-        "trailing_tp_active": false,
-        "created_at": "2025-12-16T02:31:24.699402",
-        "last_step_time": "2025-12-16T02:31:24.699402",
+        "max_profit_usd": 18.707928,
+        "trailing_tp_active": true,
+        "created_at": "2025-12-17T04:56:54.408799",
+        "last_step_time": "2025-12-17T04:56:54.408799",
         "half_closed": false,
         "entries": [
             {
-                "price": 0.44869,
-                "quantity": 89.0,
-                "margin": 3.94844211,
-                "time": "2025-12-16T13:26:32.288783",
+                "price": 0.00769,
+                "quantity": 5188.0,
+                "margin": 2.25063741,
+                "time": "2025-12-17T20:43:04.910278",
                 "recovered": true
             }
         ]
     },
-    "RAVEUSDT": {
+    "POWERUSDT": {
         "step": 1,
-        "max_profit_usd": 15.129735870000003,
-        "trailing_tp_active": true,
-        "created_at": "2025-12-16T06:02:36.692630",
-        "last_step_time": "2025-12-16T06:02:36.692630",
+        "max_profit_usd": 0,
+        "trailing_tp_active": false,
+        "created_at": "2025-12-17T15:02:41.694400",
+        "last_step_time": "2025-12-17T15:02:41.694400",
         "half_closed": false,
         "entries": [
             {
-                "price": 0.4577677011494,
-                "quantity": 87.0,
-                "margin": 2.56408819,
-                "time": "2025-12-16T13:26:32.293686",
+                "price": 0.37276,
+                "quantity": 107.0,
+                "margin": 3.91434837,
+                "time": "2025-12-17T20:43:04.912774",
                 "recovered": true
             }
         ]
     },
     "ARCUSDT": {
         "step": 5,
-        "max_profit_usd": 0,
-        "trailing_tp_active": false,
+        "max_profit_usd": 37.305425524616815,
+        "trailing_tp_active": true,
         "created_at": "2025-12-15T07:45:44.946555",
         "last_step_time": "2025-12-16T12:05:52.408215",
-        "half_closed": false,
+        "half_closed": true,
         "entries": [
             {
                 "price": 0.0438301490664,
-                "quantity": 6373.0,
-                "margin": 30.74988433,
-                "time": "2025-12-16T13:26:32.295856",
+                "quantity": 3187.0,
+                "margin": 10.558531,
+                "time": "2025-12-17T20:43:04.914838",
+                "recovered": true
+            }
+        ]
+    },
+    "GHSTUSDT": {
+        "step": 1,
+        "max_profit_usd": 9.414199999991403,
+        "trailing_tp_active": true,
+        "created_at": "2025-12-17T17:18:03.730726",
+        "last_step_time": "2025-12-17T17:18:03.730727",
+        "half_closed": false,
+        "entries": [
+            {
+                "price": 0.2293045977011,
+                "quantity": 174.0,
+                "margin": 3.07558172,
+                "time": "2025-12-17T20:43:04.916991",
+                "recovered": true
+            }
+        ]
+    },
+    "HUSDT": {
+        "step": 4,
+        "max_profit_usd": 0,
+        "trailing_tp_active": false,
+        "created_at": "2025-12-17T16:18:27.742685",
+        "last_step_time": "2025-12-17T18:54:20.649630",
+        "half_closed": false,
+        "entries": [
+            {
+                "price": 0.0935534847775,
+                "quantity": 2135.0,
+                "margin": 21.78127,
+                "time": "2025-12-17T20:43:04.919039",
                 "recovered": true
             }
         ]

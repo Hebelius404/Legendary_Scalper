@@ -336,8 +336,8 @@
     </div>
     </div>
 
-    <!-- Login Overlay -->
-    <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex flex-col items-center justify-center p-6 hidden">
+    <!-- Login Overlay (visible by default, hidden when connected) -->
+    <div id="loginOverlay" class="fixed inset-0 bg-[#121212] z-50 flex flex-col items-center justify-center p-6">
         <div class="card w-full max-w-sm p-6 text-center">
             <h1
                 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-yellow-600 mb-2">
@@ -386,7 +386,7 @@
         const elModalTrailing = document.getElementById('modalTrailing');
 
         // GLOBAL STATE
-        let supabase = null;
+        let supabaseClient = null;  // Renamed to avoid conflict with global 'supabase' from CDN
         let botId = 1;
 
         // Cache for click handlers
@@ -411,58 +411,27 @@
         // State
         let isRunning = false;
 
-        // Modal Logic
-        function showPositionDetails(symbol) {
-            const pos = currentPositionsData[symbol];
-            if (!pos) return;
-
-            // Populate
-            elModalSym.textContent = symbol;
-
-            // PnL
-            const pnl = pos.unrealized_pnl || 0;
-            elModalPnl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
-            elModalPnl.className = `text-3xl font-bold mt-1 ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`;
-
-            // Grid
-            elModalEntry.textContent = pos.average_entry.toFixed(4);
-            elModalPrice.textContent = (pos.current_price || 0).toFixed(4);
-            elModalQty.textContent = pos.total_quantity;
-            elModalMargin.textContent = `$${pos.total_margin.toFixed(2)}`;
-
-            // Steps
-            // We need to guess max steps or get from config if available globally. Fallback to 9
-            const maxSteps = window.lastConfig?.steps?.length || 9;
-            elModalStep.textContent = `${pos.step} / ${maxSteps}`;
-            elModalStepBar.style.width = `${(pos.step / maxSteps) * 100}%`;
-
-            // Trailing
-            if (pos.trailing_tp_active) {
-                elModalTrailing.innerHTML = `<span class="text-green-400">🟢 Active</span> (Max: $${pos.max_profit_usd.toFixed(2)})`;
-            } else {
-                elModalTrailing.textContent = 'Inactive';
-            }
-
-            // Show
-            elModal.classList.remove('hidden');
-        }
-
+        // Modal Logic - closeModal
         function closeModal(e) {
             if (e && e.target !== elModal && !e.target.innerText.includes('✕') && !e.target.innerText.includes('Close')) return;
             elModal.classList.add('hidden');
         }
 
+        // showPositionDetails is defined later (line ~700)
+
         async function init() {
+            console.log("Dashboard init() called");
 
             // Check LocalStorage
             const savedUrl = localStorage.getItem('ls_supa_url');
             const savedKey = localStorage.getItem('ls_supa_key');
 
             if (savedUrl && savedKey) {
+                // Hide login and connect
+                elLogin.classList.add('hidden');
                 connect(savedUrl, savedKey);
-            } else {
-                showLogin();
             }
+            // Otherwise login stays visible (default state)
         }
 
         function showLogin() {
@@ -494,8 +463,7 @@
 
         async function connect(url, key) {
             try {
-                window.supabaseClient = window.supabase.createClient(url, key);
-                supabase = window.supabaseClient;
+                supabaseClient = window.supabase.createClient(url, key);
                 elLogin.classList.add('hidden');
                 console.log("Connected to Supabase!");
                 startMonitoring();
@@ -509,7 +477,7 @@
             console.log("Initializing Monitoring...");
 
             // 1. Initial State Fetch
-            const { data, error } = await supabase.from('bot_state').select('*').eq('id', botId).single();
+            const { data, error } = await supabaseClient.from('bot_state').select('*').eq('id', botId).single();
 
             if (error) {
                 console.error("Fetch error:", error);
@@ -527,7 +495,7 @@
             fetchLogs();
 
             // 3. Realtime Subscription (State)
-            supabase.channel('bot-monitor')
+            supabaseClient.channel('bot-monitor')
                 .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bot_state', filter: `id=eq.${botId}` },
                     payload => {
                         updateUI(payload.new);
@@ -543,7 +511,7 @@
         }
 
         async function fetchLogs() {
-            const { data } = await supabase.from('logs')
+            const { data } = await supabaseClient.from('logs')
                 .select('*')
                 .order('timestamp', { ascending: false })
                 .limit(50);
@@ -708,7 +676,7 @@
         }
 
         async function sendCommand(cmd) {
-            const { error } = await supabase.from('commands').insert({
+            const { error } = await supabaseClient.from('commands').insert({
                 command: cmd,
                 status: 'PENDING'
             });

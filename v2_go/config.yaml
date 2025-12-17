@@ -1,0 +1,145 @@
+# =============================================================================
+# 🤖 LEGENDARY SCALPER v2.0 - CONFIGURATION
+# =============================================================================
+# This file controls the behavior of the trading bot.
+# Settings can be changed and will be reloaded on bot restart.
+
+# -----------------------------------------------------------------------------
+# 1. CORE STRATEGY (Martingale)
+# -----------------------------------------------------------------------------
+strategy:
+  martingale:
+    enabled: true           # Master switch for Martingale strategy
+    
+    # 💰 Step Multipliers (USDT Margin)
+    # Defines the margin size for each step.
+    # Step 1-5: Small probing entries
+    # Step 6-9: Aggressive averaging to lower entry price
+    steps: [4, 4, 6, 6, 8, 11, 16, 21, 26]
+    leverage: 10            # Match Python Bot (10x * $4 = $40 > $5 Min)
+    
+    # 📏 Step Distances (%)
+    # How far price must drop from average entry before adding next step.
+    # Example: Step 2 adds at -2.0%, Step 3 at -3.5%
+    step_distances: [0, 2.0, 3.5, 5.5, 8.0, 12.0, 18.0, 25.0, 35.0]
+    
+    # ⏳ Wait Times (Minutes)
+    # Minimum time to wait between steps to avoid rapid filling during crash.
+    step_wait_times: [0, 2, 2, 3, 3, 5, 5, 10, 10]
+    
+    max_positions: 5        # Maximum number of coins to trade simultaneously
+    min_pump_percent: 30    # Only short coins that pumped >30% in 24h
+    min_rsi_entry: 70       # Only enter SHORT if RSI > 70 (Overbought)
+    
+    # 🎯 Profit Targets
+    take_profit_percent: 1.5  # Revenue target per position
+    half_close_percent: 2.0   # Close 50% of position if price drops 2%
+
+  # 🛡️ Risk Management (Capital Protection)
+  risk_management:
+    # Hard Stops (Emergency Exits)
+    emergency_stop_usd: 250        # Close position if loss exceeds $250
+    emergency_stop_percent: 40     # Close position if price moves 40% against us
+    
+    # Daily Safety
+    daily_loss_limit_enabled: false
+    max_daily_loss_percent: 5.0    # Stop trading for 24h if account drops 5%
+    
+    # Dynamic Blacklist
+    # Automatically ban coins that hit stop loss frequently
+    dynamic_blacklist:
+      enabled: true
+      stop_losses_trigger: 2       # Ban after 2 stop losses
+      window_hours: 2              # Within 2 hours
+      duration_hours: 6            # Ban duration
+
+  # 👷 Safety Mechanisms (v1.7 Features)
+  safety:
+    # RSI Circuit Breaker
+    # Prevents adding aggressive steps (4+) if RSI is still screaming hot (>90).
+    # This saves the bot from shorting into a parabolic move that isn't finished.
+    rsi_circuit_breaker_limit: 90
+    
+    # Dynamic Step Spacing
+    # Multiplies step distances during high volatility to survive larger moves.
+    # Max 3.0x implies a 5% gap could become 15%.
+    max_volatility_multiplier: 3.0
+
+  # 📉 Trailing Stop (Lock in profits)
+  trailing_stop:
+    enabled: true
+    activation_percent: 1.0     # Start trailing after 1% profit
+    callback_percent: 0.5       # Close if price drops 0.5% from peak
+    breakeven_enabled: true     # Move Stop Loss to Entry
+    breakeven_activation: 0.5   # ...after 0.5% profit
+
+  # ✂️ Partial Take Profit
+  partial_tp:
+    enabled: true
+    percent: 50                 # Close 50% of position...
+    activation_percent: 1.0     # ...at 1.0% profit (Secure bag early)
+
+# -----------------------------------------------------------------------------
+# 2. SCANNER & PAIRS
+# -----------------------------------------------------------------------------
+scanning:
+  interval_seconds: 10          # Scan loop speed
+  top_pairs_count: 30           # Number of top volume pairs to monitor
+  quote_asset: "USDT"           # Trade only USDT pairs
+  
+  # Volatility Ranking (Smart Scanning)
+  # Instead of just volume, prioritize pairs moving fast.
+  volatility_refresh_minutes: 5
+  min_volatility_percent: 1.0
+  min_24h_volume_usdt: 3000000  # Avoid low liquidity coins (<$3M vol)
+  
+  # ⛔ Blacklist (Do not trade these)
+  blacklist:
+    - "LUNAUSDT"
+    - "USTCUSDT"
+    - "LUNCUSDT"
+    - "1000LUNCUSDT"
+    - "FTTUSDT"
+
+# -----------------------------------------------------------------------------
+# 3. ANALYSIS & INDICATORS
+# -----------------------------------------------------------------------------
+analysis:
+  # Timeframes to analyze
+  timeframes:
+    primary: "1m"       # Entry signals
+    confirmation: "5m"  # Trend confirmation
+    trend: "15m"        # Medium trend
+    macro: "30m"        # Overall direction
+    major: "1h"         # Major support/resistance
+  
+  # Indicator Settings
+  indicators:
+    ema: { fast: 9, slow: 21 }
+    rsi: { period: 7, oversold: 30, overbought: 70 }
+    macd: { fast: 12, slow: 26, signal: 9 }
+    atr: { period: 14 }
+    adx: { period: 14, min_threshold: 25, filter_enabled: true }
+
+  # 🧠 AI Features
+  ai:
+    # Grok Sentiment (xAI)
+    grok:
+      enabled: true
+      market_regime_interval: 30  # Check market sentiment every 30m
+    
+    # Chart Vision (GPT-4o / Grok Vision)
+    # Analyzes actual chart images for pattern recognition
+    vision:
+      enabled: false              # Disabled by default (Save API costs)
+      analysis_interval: 3        # Analyze top pairs every 3m
+      min_confidence: 65          # Only trade if Vision is 65% confident
+
+# -----------------------------------------------------------------------------
+# 4. SYSTEM
+# -----------------------------------------------------------------------------
+system:
+  log_level: "INFO"           # DEBUG, INFO, WARNING, ERROR
+  display_refresh_rate: 1     # UI refresh speed (seconds)
+  show_indicators: true       # Show RSI/EMA values in console log
+  use_testnet: true           # 🟢 ENABLE TESTNET (Matches Python Bot)
